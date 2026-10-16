@@ -17,6 +17,7 @@ export const ocrImage: ActionDefinition = {
   accepts: ['image/jpeg', 'image/png', 'image/webp', 'image/bmp', 'image/gif'],
   mode: 'each',
   verb: 'Extract text',
+  produces: (_, p) => (p.output === 'pdf' ? 'application/pdf' : 'text/plain'),
   engines: ['Tesseract.js'],
   params: {
     language: {

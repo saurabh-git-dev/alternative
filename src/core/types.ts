@@ -216,6 +216,13 @@ export interface ActionDefinition {
    */
   inspect?(file: FileData): Promise<ParamValues>;
   /**
+   * MIME type of the files `run` returns for an input of `inputType`, so
+   * pipelines can check that steps fit together before running. Leave it out
+   * when outputs have the input's type (most PDF tools); image tools that
+   * re-encode default to `encodableImageType` (see core/pipeline.ts).
+   */
+  produces?(inputType: string, params: ParamValues): string;
+  /**
    * Show a live preview of the first image while settings change. The action
    * runs on a downscaled copy in the preview worker, so `run` must work on
    * any image size.

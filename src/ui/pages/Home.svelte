@@ -9,6 +9,10 @@
   import Dropzone from '../components/Dropzone.svelte';
   import { readFile } from '../../core/files';
   import { handoff } from '../handoff.svelte';
+  import { PIPELINE_ROUTE, encodePipeline } from '../../core/pipeline';
+  import { loadPipelines } from '../settings';
+
+  const pipelines = loadPipelines();
 
   let { onOpen }: { onOpen: (id: string, files?: File[]) => void } = $props();
 
@@ -19,6 +23,10 @@
   const showShare = $derived.by(() => {
     const q = query.trim().toLowerCase();
     return (!q || 'share as link or qr code send to phone'.includes(q)) && dropped.length <= 1;
+  });
+  const showAutomate = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    return !dropped.length && (!q || 'pipeline automate chain batch recipe'.includes(q) || pipelines.some((p) => p.name.toLowerCase().includes(q)));
   });
 
   async function openShare() {
@@ -65,6 +73,26 @@
         <span class="title">Share as link or QR</span>
         <span class="desc muted">Put a small file or text into a link and QR code, then open it on your phone.</span>
       </button>
+    </div>
+  </section>
+{/if}
+
+{#if showAutomate}
+  <section class="group">
+    <h2>Automate</h2>
+    <div class="grid">
+      <a class="tool card" href={PIPELINE_ROUTE}>
+        <span class="icon" aria-hidden="true">⛓️</span>
+        <span class="title">Build a pipeline</span>
+        <span class="desc muted">Chain tools and run them in one go, e.g. photos → PDF → OCR → compress.</span>
+      </a>
+      {#each pipelines as p (p.name)}
+        <a class="tool card" href={`${PIPELINE_ROUTE}/${encodePipeline(p)}`}>
+          <span class="icon" aria-hidden="true">▶️</span>
+          <span class="title">{p.name}</span>
+          <span class="desc muted">{p.steps.length} steps · your pipeline</span>
+        </a>
+      {/each}
     </div>
   </section>
 {/if}
@@ -146,6 +174,10 @@
     text-align: left;
     padding: 18px;
     transition: transform 0.12s, border-color 0.12s;
+  }
+  a.tool {
+    text-decoration: none;
+    color: inherit;
   }
   .tool:hover {
     border-color: var(--accent);
