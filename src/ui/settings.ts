@@ -6,6 +6,7 @@
  * and the app works the same without it.
  */
 import type { ActionDefinition, ParamValues } from '../core/types';
+import { isWorkspaceParam } from '../core/params';
 
 const PREFIX = 'formatter:';
 
@@ -22,8 +23,8 @@ export function saveSettings(action: ActionDefinition, values: ParamValues): voi
   const safe: ParamValues = {};
   for (const [key, spec] of Object.entries(action.params)) {
     const secret = spec.kind === 'text' && spec.secret;
-    // Page orders are document-specific, so they are never remembered either.
-    if (!secret && spec.kind !== 'pageOrder') safe[key] = values[key];
+    // Workspace values (page order, crop box …) belong to one file, so they aren't remembered either.
+    if (!secret && !isWorkspaceParam(spec)) safe[key] = values[key];
   }
   try {
     localStorage.setItem(`${PREFIX}params:${action.id}`, JSON.stringify(safe));

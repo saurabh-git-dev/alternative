@@ -3,15 +3,16 @@
 PDF and image tools that run entirely in your browser. Files are processed on
 your device with WebAssembly engines and are never uploaded.
 
-## Tools (Phase 1)
+## Tools
 
-| PDF | Images |
+| Area | Tools |
 |---|---|
-| Merge, Split, Organize (reorder/rotate/delete pages), Rotate | Compress (JPG, PNG, WebP, AVIF) |
-| Compress | Resize |
-| PDF → JPG/PNG, Images → PDF | Convert format |
-| Watermark | Rotate / mirror |
-| Protect (AES-256), Unlock | |
+| Organize PDF | Merge, Split, Organize pages (reorder/rotate/delete), Rotate |
+| Optimize PDF | Compress, Repair, Fast web view |
+| Convert PDF | PDF → JPG/PNG, Images → PDF, OCR (make scanned PDFs searchable) |
+| Edit PDF | Sign, Fill forms, Watermark, Page numbers, Metadata |
+| PDF security | Protect (AES-256), Unlock, Redact (true removal) |
+| Images | Compress, Resize, Crop, Convert, Photo editor, Rotate, Watermark, Remove photo info, Image → text (OCR) |
 
 Every tool opens with recommended settings. Presets cover the common cases,
 and an **Advanced settings** drawer exposes every parameter. Your last-used
@@ -55,8 +56,11 @@ still works without them, just single-threaded.
 | [Ghostscript](https://www.ghostscript.com/) (WASM) | PDF compression | AGPL-3.0 | 15 MB |
 | [pdf-lib](https://pdf-lib.js.org/) | watermark, images → PDF | MIT | 0.4 MB |
 | [jSquash](https://github.com/jamsinclair/jSquash) (Squoosh codecs) | MozJPEG, WebP, AVIF, OxiPNG, resize | Apache-2.0 | per codec |
+| [Tesseract.js](https://tesseract.projectnaptha.com/) | OCR for images and scanned PDFs | Apache-2.0 | 4 MB + 3 MB per language |
 
 Engines load only when a tool needs them and are cached by the browser after.
+English OCR data ships with the app; other OCR languages are fetched once from
+jsDelivr when first used, then cached.
 
 ## Documentation
 

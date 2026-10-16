@@ -41,6 +41,11 @@ Home ─► Tool page                worker.ts
   previews never wait behind a job.
 - **Lazy engines.** Actions `await import()` engines inside `run`, so opening
   Merge never downloads Ghostscript.
+- **Workspace parameters.** Tools that need direct manipulation (page grid,
+  crop box, redaction boxes, signature, form) declare one workspace
+  parameter; the tool page renders the matching editor in the main area.
+- **Live previews.** Image tools with `livePreview` re-run on a downscaled
+  copy in a dedicated worker; stale results are discarded.
 - **Quality guards.** Compress tools return the original when the "compressed"
   result would be larger, with a note explaining why.
 - **Zero-copy transfers.** File bytes move to and from workers as transferred

@@ -1,0 +1,20 @@
+/** OCR languages offered in the UI (Tesseract language codes). */
+export const OCR_LANGUAGES = [
+  { value: 'eng', label: 'English' },
+  { value: 'hin', label: 'Hindi' },
+  { value: 'spa', label: 'Spanish' },
+  { value: 'fra', label: 'French' },
+  { value: 'deu', label: 'German' },
+  { value: 'por', label: 'Portuguese' },
+  { value: 'ita', label: 'Italian' },
+  { value: 'rus', label: 'Russian' },
+  { value: 'ara', label: 'Arabic' },
+  { value: 'chi_sim', label: 'Chinese (simplified)' },
+  { value: 'jpn', label: 'Japanese' },
+  { value: 'kor', label: 'Korean' },
+  { value: 'ben', label: 'Bengali' },
+  { value: 'tam', label: 'Tamil' },
+  { value: 'tel', label: 'Telugu' },
+  { value: 'mar', label: 'Marathi' },
+  { value: 'urd', label: 'Urdu' },
+];

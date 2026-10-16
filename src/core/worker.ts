@@ -21,6 +21,31 @@ const api = {
     return Comlink.transfer(outputs, outputs.map((o) => o.bytes.buffer as ArrayBuffer));
   },
 
+  /** Values to prefill from the first file (see ActionDefinition.inspect). */
+  async inspect(actionId: string, file: FileData): Promise<ParamValues> {
+    const action = getAction(actionId);
+    return action?.inspect ? action.inspect(file) : {};
+  },
+
+  /**
+   * Live preview: run an image action on a copy of `file` scaled down to fit
+   * `maxSize` pixels, and return the first output image.
+   */
+  async preview(actionId: string, file: FileData, params: ParamValues, maxSize: number): Promise<FileData | null> {
+    const action = getAction(actionId);
+    if (!action) return null;
+    const { downscale } = await import('../engines/image');
+    const small = await downscale(file, maxSize);
+    const [out] = await action.run([small], params, { progress: () => {} });
+    return out ? Comlink.transfer(out, [out.bytes.buffer as ArrayBuffer]) : null;
+  },
+
+  /** Form fields of a PDF, with their current values. */
+  async formFields(bytes: Uint8Array) {
+    const { readFormFields } = await import('../engines/pdflib');
+    return readFormFields(bytes);
+  },
+
   /** Page count and encryption status of a PDF. */
   async inspectPdf(bytes: Uint8Array) {
     const { inspectPdf } = await import('../engines/mupdf');

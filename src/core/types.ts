@@ -96,6 +96,44 @@ export interface PageRef {
   rotate: number;
 }
 
+/** A rectangle in fractions (0–1) of the page or image, measured from the top-left. */
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** A box on a given PDF page (1-based). */
+export interface PageBox extends Box {
+  page: number;
+}
+
+/** Crop rectangle on an image, drawn on the first image and applied proportionally to all. */
+export interface CropParam extends ParamBase<Box> {
+  kind: 'crop';
+}
+
+/** Rectangles drawn on PDF pages, e.g. areas to redact. */
+export interface RegionsParam extends ParamBase<PageBox[]> {
+  kind: 'regions';
+}
+
+/** A signature image (PNG data URL) and where it is placed on the pages. */
+export interface SignatureValue {
+  image: string;
+  placements: PageBox[];
+}
+
+export interface SignatureParam extends ParamBase<SignatureValue> {
+  kind: 'signature';
+}
+
+/** Values for the PDF's form fields, keyed by field name. Filled from the document. */
+export interface FormFieldsParam extends ParamBase<Record<string, string | boolean>> {
+  kind: 'formFields';
+}
+
 export type ParamSpec =
   | EnumParam
   | NumberParam
@@ -103,9 +141,21 @@ export type ParamSpec =
   | TextParam
   | ColorParam
   | PositionParam
-  | PageOrderParam;
+  | PageOrderParam
+  | CropParam
+  | RegionsParam
+  | SignatureParam
+  | FormFieldsParam;
 
-export type ParamValue = string | number | boolean | PageRef[];
+export type ParamValue =
+  | string
+  | number
+  | boolean
+  | PageRef[]
+  | Box
+  | PageBox[]
+  | SignatureValue
+  | Record<string, string | boolean>;
 export type ParamValues = Record<string, ParamValue>;
 
 /** Named, ready-made parameter set, e.g. "Recommended" or "Extreme". */
@@ -160,6 +210,17 @@ export interface ActionDefinition {
   defaultPreset?: string;
   /** Which engine(s) the action loads, shown in "How it works". */
   engines: string[];
+  /**
+   * Optional: read the first file and return parameter values to prefill,
+   * e.g. a PDF's current metadata. Runs in the preview worker.
+   */
+  inspect?(file: FileData): Promise<ParamValues>;
+  /**
+   * Show a live preview of the first image while settings change. The action
+   * runs on a downscaled copy in the preview worker, so `run` must work on
+   * any image size.
+   */
+  livePreview?: boolean;
   /**
    * Do the work. Runs inside a Web Worker. Import engines lazily inside the
    * function (`await import(...)`) so the main bundle stays small.

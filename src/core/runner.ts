@@ -112,6 +112,28 @@ function previewApi(): Comlink.Remote<WorkerApi> {
   return preview.api;
 }
 
+export function inspectAction(actionId: string, file: FileData) {
+  return previewApi().inspect(actionId, { ...file, bytes: file.bytes.slice() });
+}
+
+export function formFields(bytes: Uint8Array) {
+  return previewApi().formFields(bytes.slice());
+}
+
+/**
+ * Live preview runs in its own worker so a slow encode never delays
+ * thumbnails. A newer request supersedes an older one still in flight.
+ */
+let livePreviewWorker: ReturnType<typeof spawn> | null = null;
+let previewTicket = 0;
+
+export async function livePreview(actionId: string, file: FileData, params: ParamValues, maxSize = 900): Promise<FileData | null> {
+  const ticket = ++previewTicket;
+  livePreviewWorker ??= spawn();
+  const out = await livePreviewWorker.api.preview(actionId, { ...file, bytes: file.bytes.slice() }, params, maxSize);
+  return ticket === previewTicket ? out : null;
+}
+
 export function inspectPdf(bytes: Uint8Array) {
   return previewApi().inspectPdf(bytes.slice());
 }

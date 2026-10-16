@@ -55,17 +55,11 @@ export const watermarkPdf: ActionDefinition = {
     },
   },
   async run([file], params, ctx) {
-    const [{ PDFDocument, StandardFonts, rgb, degrees }, { hexToRgb }] = await Promise.all([
+    const [{ StandardFonts, rgb, degrees }, { hexToRgb, loadPdf }] = await Promise.all([
       import('pdf-lib'),
       import('../../engines/pdflib'),
     ]);
-    let doc;
-    try {
-      doc = await PDFDocument.load(file.bytes);
-    } catch (e) {
-      if (/encrypted/i.test(String(e))) throw new Error('This PDF is password-protected. Unlock it first.');
-      throw e;
-    }
+    const doc = await loadPdf(file.bytes);
     const font = await doc.embedFont(params.bold ? StandardFonts.HelveticaBold : StandardFonts.Helvetica);
     const text = (params.text as string).trim();
     const size = params.size as number;

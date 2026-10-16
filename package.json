@@ -21,10 +21,13 @@
     "@jsquash/resize": "^2.1.1",
     "@jsquash/webp": "^1.5.0",
     "@neslinesli93/qpdf-wasm": "^0.3.0",
+    "@tesseract.js-data/eng": "^1.0.0",
     "comlink": "^4.4.2",
     "fflate": "^0.8.3",
     "mupdf": "^1.28.1",
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "tesseract.js": "^7.0.0",
+    "tesseract.js-core": "^7.0.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
