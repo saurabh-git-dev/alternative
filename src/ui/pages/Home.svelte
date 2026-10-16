@@ -14,6 +14,21 @@
 
   const pipelines = loadPipelines();
 
+  /**
+   * Tools that are pages of their own rather than actions (their result is a
+   * view, not a file). They are listed in their category alongside actions.
+   */
+  const PAGES = [
+    {
+      href: '#/compare',
+      icon: '🔀',
+      title: 'Compare PDFs',
+      description: 'See what changed between two versions, word by word and on the page.',
+      category: 'pdf-edit',
+      accepts: 'application/pdf',
+    },
+  ];
+
   let { onOpen }: { onOpen: (id: string, files?: File[]) => void } = $props();
 
   let query = $state('');
@@ -28,6 +43,11 @@
     const q = query.trim().toLowerCase();
     return !dropped.length && (!q || 'pipeline automate chain batch recipe'.includes(q) || pipelines.some((p) => p.name.toLowerCase().includes(q)));
   });
+
+  function matchesPage(p: (typeof PAGES)[number]): boolean {
+    const q = query.trim().toLowerCase();
+    return (!q || `${p.title} ${p.description}`.toLowerCase().includes(q)) && dropped.every((f) => detectType(f) === p.accepts);
+  }
 
   async function openShare() {
     handoff.file = dropped[0] ? await readFile(dropped[0]) : null;
@@ -99,10 +119,18 @@
 
 {#each CATEGORIES as category (category.id)}
   {@const tools = visible.filter((a) => a.category === category.id)}
-  {#if tools.length}
+  {@const pages = PAGES.filter((p) => p.category === category.id && matchesPage(p))}
+  {#if tools.length || pages.length}
     <section class="group">
       <h2>{category.label}</h2>
       <div class="grid">
+        {#each pages as p (p.href)}
+          <a class="tool card" href={p.href}>
+            <span class="icon" aria-hidden="true">{p.icon}</span>
+            <span class="title">{p.title}</span>
+            <span class="desc muted">{p.description}</span>
+          </a>
+        {/each}
         {#each tools as tool (tool.id)}
           <button class="tool card" onclick={() => onOpen(tool.id, dropped)}>
             <span class="icon" aria-hidden="true">{tool.icon}</span>

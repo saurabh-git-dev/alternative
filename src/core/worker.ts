@@ -59,6 +59,20 @@ const api = {
     return Comlink.transfer(thumbs, thumbs.map((t) => t.buffer as ArrayBuffer));
   },
 
+  /** Text of every page of a PDF. */
+  async pageTexts(bytes: Uint8Array) {
+    const { pageTexts } = await import('../engines/mupdf');
+    return pageTexts(bytes);
+  },
+
+  /** Pixel comparison of one page of each PDF (see engines/mupdf.ts visualDiff). */
+  async visualDiff(a: Uint8Array, b: Uint8Array, pageA: number, pageB: number, width: number, images: boolean) {
+    const { visualDiff } = await import('../engines/mupdf');
+    const r = await visualDiff(a, b, pageA, pageB, width, images);
+    const buffers = [r.before, r.after, r.diff].filter((x): x is Uint8Array => !!x).map((x) => x.buffer as ArrayBuffer);
+    return Comlink.transfer(r, buffers);
+  },
+
   /** Shrink an image to fit a byte budget (see engines/image.ts fitToBytes). */
   async fitImage(file: FileData, maxBytes: number, onProgress: ProgressCallback) {
     const { fitToBytes } = await import('../engines/image');

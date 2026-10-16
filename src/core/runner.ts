@@ -151,3 +151,20 @@ export function fitImage(file: FileData, maxBytes: number, onProgress: (fraction
   const result = api.fitImage({ ...file, bytes: file.bytes.slice() }, maxBytes, Comlink.proxy(report)).finally(() => worker.terminate());
   return { result, cancel: () => worker.terminate() };
 }
+
+// ---------------------------------------------------------------------------
+// Compare PDFs: a worker of its own, kept while the compare page is open
+// ---------------------------------------------------------------------------
+
+let compareWorker: ReturnType<typeof spawn> | null = null;
+
+export function compareApi(): Comlink.Remote<WorkerApi> {
+  compareWorker ??= spawn();
+  return compareWorker.api;
+}
+
+/** Stop any comparison still running (e.g. when new files are chosen). */
+export function resetCompare(): void {
+  compareWorker?.worker.terminate();
+  compareWorker = null;
+}

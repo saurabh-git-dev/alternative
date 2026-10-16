@@ -1,8 +1,8 @@
 <!--
   App shell: header and a tiny hash router.
   Routes: `#/` (home), `#/tool/<action id>`, `#/share`, share links
-  `#/s/<data>` / `#/q/<data>` (see core/share.ts), and `#/pipeline[/<data>]`
-  (see core/pipeline.ts). Hash routing works on any
+  `#/s/<data>` / `#/q/<data>` (see core/share.ts), `#/pipeline[/<data>]`
+  (see core/pipeline.ts) and `#/compare`. Hash routing works on any
   static host with no server configuration.
 -->
 <script lang="ts">
@@ -11,6 +11,7 @@
   import Share from './pages/Share.svelte';
   import Received from './pages/Received.svelte';
   import PipelinePage from './pages/Pipeline.svelte';
+  import Compare from './pages/Compare.svelte';
   import { PIPELINE_ROUTE } from '../core/pipeline';
   import { LINK_ROUTE, QR_ROUTE } from '../core/share';
   import { getAction } from '../actions';
@@ -37,7 +38,9 @@
       ? 'tool'
       : hash === PIPELINE_ROUTE || hash.startsWith(`${PIPELINE_ROUTE}/`)
         ? 'pipeline'
-        : hash === '#/share'
+        : hash === '#/compare'
+          ? 'compare'
+          : hash === '#/share'
           ? 'share'
           : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : 'home',
   );
@@ -47,6 +50,8 @@
       ? `${action.title} · Formatter`
       : page === 'pipeline'
         ? 'Pipeline · Formatter'
+        : page === 'compare'
+        ? 'Compare PDFs · Formatter'
         : page === 'share'
         ? 'Share as link or QR · Formatter'
         : page === 'received'
@@ -87,6 +92,8 @@
     {#key hash}
       <PipelinePage encoded={hash.slice(PIPELINE_ROUTE.length + 1)} />
     {/key}
+  {:else if page === 'compare'}
+    <Compare />
   {:else if page === 'share'}
     <Share />
   {:else if page === 'received'}
