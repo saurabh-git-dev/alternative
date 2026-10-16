@@ -10,6 +10,7 @@ import { rotatePdf } from './pdf/rotate';
 import { compressPdf } from './pdf/compress';
 import { pdfToImages } from './pdf/to-images';
 import { imagesToPdf } from './pdf/from-images';
+import { officeToPdf } from './pdf/from-office';
 import { watermarkPdf } from './pdf/watermark';
 import { protectPdf } from './pdf/protect';
 import { unlockPdf } from './pdf/unlock';
@@ -47,6 +48,7 @@ export const ACTIONS: ActionDefinition[] = [
   webViewPdf,
   pdfToImages,
   imagesToPdf,
+  officeToPdf,
   ocrPdf,
   signPdf,
   annotatePdf,

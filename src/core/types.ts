@@ -274,7 +274,13 @@ export interface ActionDefinition {
    */
   livePreview?: boolean;
   /**
-   * Do the work. Runs inside a Web Worker. Import engines lazily inside the
+   * Run `run` on the page instead of in a job worker. Only for actions whose
+   * engine starts its own worker anyway: LibreOffice's threads stall for over
+   * a minute when started from inside a module worker.
+   */
+  mainThread?: boolean;
+  /**
+   * Do the work. Runs inside a Web Worker (unless `mainThread`). Import engines lazily inside the
    * function (`await import(...)`) so the main bundle stays small.
    */
   run(files: FileData[], params: ParamValues, ctx: RunContext): Promise<OutputFile[]>;

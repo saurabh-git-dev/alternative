@@ -23,6 +23,18 @@ const VENDOR_FILES: Record<string, string> = {
   ...Object.fromEntries(
     [1, 2, 3, 4, 5].map((i) => [`vendor/models/rmbg-1.4/briaai-${i}.onnx`, nodeModules(`@rmbg/model-briaai/briaai-${i}.onnx`)]),
   ),
+  // LibreOffice (src/engines/libreoffice.ts). The two big parts stay gzipped
+  // (49 + 29 MB) and are unpacked in the browser: unpacked, the WASM is 147 MB,
+  // over GitHub Pages' 100 MB file limit.
+  ...Object.fromEntries(
+    ['browser.worker.global.js', 'soffice.js', 'soffice.worker.js', 'soffice.wasm.gz', 'soffice.data.gz'].map((f) => [
+      `vendor/libreoffice/${f}`,
+      nodeModules(`@bentopdf/libreoffice-wasm/assets/${f}`),
+    ]),
+  ),
+  'vendor/libreoffice/loader.js': fileURLToPath(new URL('./vendor-src/libreoffice-loader.js', import.meta.url)),
+  // Adds the cross-origin isolation headers on hosts that can't (see index.html).
+  'coi-serviceworker.min.js': nodeModules('coi-serviceworker/coi-serviceworker.min.js'),
   // Converted from Real-ESRGAN's weights by tools/convert-realesrgan.py.
   'vendor/models/realesr-general-x4.onnx': fileURLToPath(new URL('./models/realesr-general-x4.onnx', import.meta.url)),
 };

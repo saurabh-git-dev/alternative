@@ -40,7 +40,8 @@ export function runAction(
   params: ParamValues,
   onProgress: (p: JobProgress) => void,
 ): JobHandle {
-  const { worker, api } = spawn();
+  // Main-thread actions call `run` directly; their engine owns its own worker.
+  const { worker, api } = action.mainThread ? { worker: null, api: mainThreadApi } : spawn();
   let cancelled = false;
   let rejectCancelled!: (e: Error) => void;
   const cancelledSignal = new Promise<never>((_, reject) => (rejectCancelled = reject));
@@ -79,7 +80,7 @@ export function runAction(
       onProgress({ fraction: 1 });
       return outputs;
     } finally {
-      worker.terminate();
+      worker?.terminate();
     }
   })();
 
@@ -88,12 +89,20 @@ export function runAction(
     cancel() {
       if (cancelled) return;
       cancelled = true;
-      worker.terminate();
+      worker?.terminate();
       // A terminated worker never answers, so settle the pending await ourselves.
       rejectCancelled(new CancelledError());
     },
   };
 }
+
+/** Same shape as the worker's `run`, for actions with `mainThread` set. */
+const mainThreadApi = {
+  async run(actionId: string, files: FileData[], params: ParamValues, onProgress: (fraction: number, message?: string) => void) {
+    const { getAction } = await import('../actions');
+    return getAction(actionId)!.run(files, params, { progress: onProgress });
+  },
+};
 
 export class CancelledError extends Error {
   constructor() {
