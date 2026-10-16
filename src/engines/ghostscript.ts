@@ -2,7 +2,7 @@
  * Ghostscript engine: PDF re-distillation for compression, grayscale and PDF/A.
  *
  * Source:  Ghostscript compiled to WASM (@bentopdf/gs-wasm, AGPL-3.0), ~15 MB.
- * Used for: Compress PDF.
+ * Used for: Compress PDF, PDF to PDF/A.
  * Why Ghostscript: its pdfwrite device re-encodes images at a target
  * resolution, subsets fonts and removes duplicates, which gives the best
  * size/quality trade-off of any open-source engine.
@@ -23,8 +23,15 @@ function loadFactory(): Promise<GhostscriptModuleFactory> {
   return factory;
 }
 
+export interface GhostscriptExtras {
+  /** Extra files to place in Ghostscript's filesystem, by absolute path. */
+  files?: Record<string, Uint8Array | string>;
+  /** PostScript files to run after the output is set up and before the input (e.g. PDFA_def.ps). */
+  prelude?: string[];
+}
+
 /** Run Ghostscript with the given arguments on one input PDF; returns the output file. */
-export async function runGhostscript(input: Uint8Array, args: string[]): Promise<Uint8Array> {
+export async function runGhostscript(input: Uint8Array, args: string[], extras: GhostscriptExtras = {}): Promise<Uint8Array> {
   const log: string[] = [];
   const create = await loadFactory();
   const gs = await create({
@@ -33,13 +40,16 @@ export async function runGhostscript(input: Uint8Array, args: string[]): Promise
     printErr: (t: string) => log.push(t),
   } as never);
   gs.FS.writeFile('/input.pdf', input);
+  for (const [path, data] of Object.entries(extras.files ?? {})) gs.FS.writeFile(path, data);
   const code = gs.callMain([
     '-dNOPAUSE',
     '-dBATCH',
     '-dSAFER',
     '-dQUIET',
     ...args,
+    ...(extras.prelude ?? []).map((path) => `--permit-file-read=${path}`),
     '-sOutputFile=/output.pdf',
+    ...(extras.prelude ?? []),
     '/input.pdf',
   ]);
   if (code !== 0) {

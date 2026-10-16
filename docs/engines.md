@@ -22,6 +22,10 @@ libraries directly, so swapping an engine touches one file.
   Images are only downsampled when more than 1.5× the target, to avoid
   degrading images that are already about the right size.
 - Followed by a lossless qpdf pass (object streams, Flate level 9).
+- PDF/A: `-dPDFA=1|2|3 -dPDFACompatibilityPolicy=1` plus a `PDFA_def.ps`
+  prelude (written into Ghostscript's virtual filesystem) that attaches the
+  sRGB (or sGray) output intent from Ghostscript's built-in `%rom%`
+  ICC profiles. Not validated in the browser (veraPDF is Java).
 
 ## Image (`image.ts`)
 - Decode: browser `createImageBitmap` (honours EXIF orientation).

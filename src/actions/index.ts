@@ -24,6 +24,7 @@ import { metadataPdf } from './pdf/metadata';
 import { ocrPdf } from './pdf/ocr';
 import { signPdf } from './pdf/sign';
 import { annotatePdf } from './pdf/annotate';
+import { pdfToPdfa } from './pdf/pdfa';
 import { redactPdf } from './pdf/redact';
 import { fillFormPdf } from './pdf/fill-form';
 import { watermarkImage } from './image/watermark';
@@ -46,6 +47,7 @@ export const ACTIONS: ActionDefinition[] = [
   ocrPdf,
   signPdf,
   annotatePdf,
+  pdfToPdfa,
   fillFormPdf,
   watermarkPdf,
   pageNumbersPdf,
