@@ -1,11 +1,15 @@
 <!--
   App shell: header and a tiny hash router.
-  Routes: `#/` (home) and `#/tool/<action id>`. Hash routing works on any
+  Routes: `#/` (home), `#/tool/<action id>`, `#/share`, and share links
+  `#/s/<data>` / `#/q/<data>` (see core/share.ts). Hash routing works on any
   static host with no server configuration.
 -->
 <script lang="ts">
   import Home from './pages/Home.svelte';
   import Tool from './pages/Tool.svelte';
+  import Share from './pages/Share.svelte';
+  import Received from './pages/Received.svelte';
+  import { LINK_ROUTE, QR_ROUTE } from '../core/share';
   import { getAction } from '../actions';
   import { loadTheme, saveTheme, type Theme } from './settings';
 
@@ -25,8 +29,18 @@
 
   const action = $derived(hash.startsWith('#/tool/') ? getAction(decodeURIComponent(hash.slice(7))) : undefined);
 
+  const page = $derived(
+    action ? 'tool' : hash === '#/share' ? 'share' : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : 'home',
+  );
+
   $effect(() => {
-    document.title = action ? `${action.title} · Formatter` : 'Formatter · PDF & image tools';
+    document.title = action
+      ? `${action.title} · Formatter`
+      : page === 'share'
+        ? 'Share as link or QR · Formatter'
+        : page === 'received'
+          ? 'Shared file · Formatter'
+          : 'Formatter · PDF & image tools';
   });
 
   function toggleTheme() {
@@ -58,6 +72,10 @@
     {#key action.id}
       <Tool {action} initialFiles={pending} />
     {/key}
+  {:else if page === 'share'}
+    <Share />
+  {:else if page === 'received'}
+    <Received {hash} onOpen={openTool} />
   {:else}
     <Home onOpen={openTool} />
   {/if}

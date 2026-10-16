@@ -143,3 +143,11 @@ export async function pdfThumbnails(bytes: Uint8Array, pages: number[], width = 
   const images = await previewApi().thumbnails(bytes.slice(), pages, width);
   return images.map((img) => URL.createObjectURL(new Blob([img as BlobPart], { type: 'image/jpeg' })));
 }
+
+/** Shrink an image to at most `maxBytes` in a worker of its own (cancellable). */
+export function fitImage(file: FileData, maxBytes: number, onProgress: (fraction: number) => void) {
+  const { worker, api } = spawn();
+  const report = (fraction: number): void => onProgress(fraction);
+  const result = api.fitImage({ ...file, bytes: file.bytes.slice() }, maxBytes, Comlink.proxy(report)).finally(() => worker.terminate());
+  return { result, cancel: () => worker.terminate() };
+}

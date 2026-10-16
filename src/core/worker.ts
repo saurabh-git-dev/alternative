@@ -58,6 +58,13 @@ const api = {
     const thumbs = await renderThumbnails(bytes, pages, width);
     return Comlink.transfer(thumbs, thumbs.map((t) => t.buffer as ArrayBuffer));
   },
+
+  /** Shrink an image to fit a byte budget (see engines/image.ts fitToBytes). */
+  async fitImage(file: FileData, maxBytes: number, onProgress: ProgressCallback) {
+    const { fitToBytes } = await import('../engines/image');
+    const fitted = await fitToBytes(file, maxBytes, (f) => onProgress(f));
+    return fitted ? Comlink.transfer(fitted, [fitted.bytes.buffer as ArrayBuffer]) : null;
+  },
 };
 
 export type WorkerApi = typeof api;

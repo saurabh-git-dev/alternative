@@ -13,6 +13,7 @@ your device with WebAssembly engines and are never uploaded.
 | Edit PDF | Sign, Fill forms, Watermark, Page numbers, Metadata |
 | PDF security | Protect (AES-256), Unlock, Redact (true removal) |
 | Images | Compress, Resize, Crop, Convert, Photo editor, Rotate, Watermark, Remove photo info, Image → text (OCR) |
+| Share | Share as link or QR code: any small file, or pasted text, CSV or JSON, packed into the link itself |
 
 Every tool opens with recommended settings. Presets cover the common cases,
 and an **Advanced settings** drawer exposes every parameter. Your last-used
@@ -67,6 +68,7 @@ jsDelivr when first used, then cached.
 - [Architecture](docs/architecture.md): how actions, the runner, workers and the UI fit together
 - [Adding a tool](docs/adding-a-tool.md): step-by-step guide
 - [Engines](docs/engines.md): what each engine does, defaults, and why
+- [Share links](docs/share-links.md): the link and QR formats, and their size limits
 
 ## License
 

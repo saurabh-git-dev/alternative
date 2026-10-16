@@ -7,11 +7,24 @@
   import { ACTIONS, CATEGORIES } from '../../actions';
   import { accepts, detectType } from '../../core/files';
   import Dropzone from '../components/Dropzone.svelte';
+  import { readFile } from '../../core/files';
+  import { handoff } from '../handoff.svelte';
 
   let { onOpen }: { onOpen: (id: string, files?: File[]) => void } = $props();
 
   let query = $state('');
   let dropped = $state<File[]>([]);
+
+  /** Share isn't an action (its output is a link, not a file), so it is listed here. */
+  const showShare = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    return (!q || 'share as link or qr code send to phone'.includes(q)) && dropped.length <= 1;
+  });
+
+  async function openShare() {
+    handoff.file = dropped[0] ? await readFile(dropped[0]) : null;
+    location.hash = '#/share';
+  }
 
   const visible = $derived(
     ACTIONS.filter((a) => {
@@ -42,6 +55,19 @@
     <Dropzone compact accept="application/pdf,image/*" label="Not sure which tool? Drop a file here to see what you can do with it." onFiles={(f) => (dropped = f)} />
   {/if}
 </div>
+
+{#if showShare}
+  <section class="group">
+    <h2>Share</h2>
+    <div class="grid">
+      <button class="tool card" onclick={openShare}>
+        <span class="icon" aria-hidden="true">🔗</span>
+        <span class="title">Share as link or QR</span>
+        <span class="desc muted">Put a small file or text into a link and QR code, then open it on your phone.</span>
+      </button>
+    </div>
+  </section>
+{/if}
 
 {#each CATEGORIES as category (category.id)}
   {@const tools = visible.filter((a) => a.category === category.id)}
