@@ -15,6 +15,7 @@ export const WORKSPACE_KINDS: ReadonlySet<ParamSpec['kind']> = new Set([
   'regions',
   'signature',
   'formFields',
+  'annotations',
 ]);
 
 export function isWorkspaceParam(spec: ParamSpec): boolean {

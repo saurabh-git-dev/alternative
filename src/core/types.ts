@@ -130,6 +130,31 @@ export interface SignatureParam extends ParamBase<SignatureValue> {
 }
 
 /** Values for the PDF's form fields, keyed by field name. Filled from the document. */
+/** One mark drawn by Annotate PDF. Geometry is in fractions of the displayed page. */
+export interface Annotation {
+  page: number;
+  kind: 'pen' | 'highlight' | 'text' | 'box' | 'ellipse' | 'arrow' | 'whiteout' | 'comment';
+  /** `#rrggbb`. */
+  color: string;
+  /** Line width as a fraction of the page width. */
+  width: number;
+  /** Bounding box (highlight, text, box, ellipse, whiteout) or anchor point (comment: x, y). */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Pen strokes, or the arrow's [start, end]. */
+  points?: [number, number][][];
+  /** Text box or comment text. */
+  text?: string;
+  /** Font size as a fraction of the page width. */
+  size?: number;
+}
+
+export interface AnnotationsParam extends ParamBase<Annotation[]> {
+  kind: 'annotations';
+}
+
 export interface FormFieldsParam extends ParamBase<Record<string, string | boolean>> {
   kind: 'formFields';
 }
@@ -145,7 +170,8 @@ export type ParamSpec =
   | CropParam
   | RegionsParam
   | SignatureParam
-  | FormFieldsParam;
+  | FormFieldsParam
+  | AnnotationsParam;
 
 export type ParamValue =
   | string
@@ -155,7 +181,8 @@ export type ParamValue =
   | Box
   | PageBox[]
   | SignatureValue
-  | Record<string, string | boolean>;
+  | Record<string, string | boolean>
+  | Annotation[];
 export type ParamValues = Record<string, ParamValue>;
 
 /** Named, ready-made parameter set, e.g. "Recommended" or "Extreme". */

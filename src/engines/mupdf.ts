@@ -9,6 +9,7 @@
  * The module is imported lazily so only tools that need it pay the download.
  */
 import type * as MuPDF from 'mupdf';
+import type { Annotation } from '../core/types';
 
 let modulePromise: Promise<typeof MuPDF> | null = null;
 
@@ -326,5 +327,102 @@ export async function visualDiff(a: Uint8Array, b: Uint8Array, pageA: number, pa
   } finally {
     docA.destroy();
     docB.destroy();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Annotations
+// ---------------------------------------------------------------------------
+
+/**
+ * Add annotations as real PDF annotations (so they stay editable in Acrobat,
+ * Preview and other viewers), or bake them into the page content when
+ * `flatten` is set. Geometry comes in fractions of the displayed page.
+ */
+export async function annotate(bytes: Uint8Array, annotations: Annotation[], options: { flatten: boolean; author: string }): Promise<Uint8Array> {
+  const mupdf = await loadMupdf();
+  const doc = mupdf.Document.openDocument(bytes, 'application/pdf') as InstanceType<typeof mupdf.PDFDocument>;
+  if (doc.needsPassword()) {
+    doc.destroy();
+    throw new Error('This PDF is password-protected. Unlock it first.');
+  }
+  try {
+    const rgb = (hex: string): [number, number, number] => {
+      const n = parseInt(hex.slice(1), 16);
+      return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+    };
+    for (const a of annotations) {
+      if (a.page < 1 || a.page > doc.countPages()) continue;
+      const page = doc.loadPage(a.page - 1) as InstanceType<typeof mupdf.PDFPage>;
+      const [bx0, by0, bx1, by1] = page.getBounds();
+      const pw = bx1 - bx0;
+      const ph = by1 - by0;
+      const pt = (x: number, y: number): [number, number] => [bx0 + x * pw, by0 + y * ph];
+      const rect = (): [number, number, number, number] => [...pt(a.x, a.y), ...pt(a.x + a.w, a.y + a.h)];
+      const color = rgb(a.color);
+      const width = a.width * pw;
+      let annot: InstanceType<typeof mupdf.PDFAnnotation>;
+      switch (a.kind) {
+        case 'pen':
+          annot = page.createAnnotation('Ink');
+          annot.setInkList((a.points ?? []).map((stroke) => stroke.map(([x, y]) => pt(x, y))));
+          annot.setColor(color);
+          annot.setBorderWidth(width);
+          break;
+        case 'highlight': {
+          annot = page.createAnnotation('Highlight');
+          const [x0, y0, x1, y1] = rect();
+          annot.setQuadPoints([[x0, y0, x1, y0, x0, y1, x1, y1]]);
+          annot.setColor(color);
+          break;
+        }
+        case 'box':
+        case 'ellipse':
+          annot = page.createAnnotation(a.kind === 'box' ? 'Square' : 'Circle');
+          annot.setRect(rect());
+          annot.setColor(color);
+          annot.setBorderWidth(width);
+          break;
+        case 'whiteout':
+          annot = page.createAnnotation('Square');
+          annot.setRect(rect());
+          annot.setColor([1, 1, 1]);
+          annot.setInteriorColor([1, 1, 1]);
+          annot.setBorderWidth(0);
+          break;
+        case 'arrow': {
+          const [[start, end]] = a.points ?? [[[a.x, a.y], [a.x + a.w, a.y + a.h]]];
+          annot = page.createAnnotation('Line');
+          annot.setLine(pt(...start), pt(...end));
+          annot.setLineEndingStyles('None', 'OpenArrow');
+          annot.setColor(color);
+          annot.setBorderWidth(width);
+          break;
+        }
+        case 'text':
+          annot = page.createAnnotation('FreeText');
+          annot.setRect(rect());
+          annot.setContents(a.text ?? '');
+          annot.setDefaultAppearance('Helv', (a.size ?? 0.02) * pw, color);
+          annot.setBorderWidth(0);
+          break;
+        case 'comment': {
+          annot = page.createAnnotation('Text');
+          const [x, y] = pt(a.x, a.y);
+          annot.setRect([x, y, x + 20, y + 20]);
+          annot.setContents(a.text ?? '');
+          annot.setIcon('Comment');
+          annot.setColor(color);
+          break;
+        }
+      }
+      if (options.author) annot.setAuthor(options.author);
+      annot.update();
+      page.destroy();
+    }
+    if (options.flatten) doc.bake(true, false);
+    return doc.saveToBuffer('garbage=compact,compress=yes').asUint8Array().slice();
+  } finally {
+    doc.destroy();
   }
 }
