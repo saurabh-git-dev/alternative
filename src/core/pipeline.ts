@@ -11,7 +11,7 @@
  */
 import type { ActionDefinition, FileData, OutputFile, ParamValues } from './types';
 import { ACTIONS, getAction } from '../actions';
-import { isWorkspaceParam, initialValues, validate } from './params';
+import { isPrivateParam, isWorkspaceParam, initialValues, validate } from './params';
 import { fromBase64Url, toBase64Url } from './share';
 
 export interface PipelineStep {
@@ -139,7 +139,7 @@ export async function runPipeline(
 /** Route for a pipeline carried in the link, e.g. `#/pipeline/<data>`. */
 export const PIPELINE_ROUTE = '#/pipeline';
 
-/** Pipeline as link-safe text. Passwords are never included. */
+/** Pipeline as link-safe text. Passwords and picked files are never included. */
 export function encodePipeline(pipeline: Pipeline): string {
   return toBase64Url(new TextEncoder().encode(JSON.stringify(withoutSecrets(pipeline))));
 }
@@ -165,7 +165,7 @@ export function withoutSecrets(pipeline: Pipeline): Pipeline {
     steps: pipeline.steps.map((step) => {
       const action = getAction(step.actionId);
       const params = { ...step.params };
-      for (const [key, spec] of Object.entries(action?.params ?? {})) if (spec.kind === 'text' && spec.secret) params[key] = spec.default;
+      for (const [key, spec] of Object.entries(action?.params ?? {})) if (isPrivateParam(spec)) params[key] = spec.default;
       return { actionId: step.actionId, params };
     }),
   };

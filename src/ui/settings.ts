@@ -8,7 +8,7 @@
  */
 import type { ActionDefinition, ParamValues } from '../core/types';
 import { withoutSecrets, type Pipeline } from '../core/pipeline';
-import { isWorkspaceParam } from '../core/params';
+import { isPrivateParam, isWorkspaceParam } from '../core/params';
 
 const PREFIX = 'formatter:';
 
@@ -24,7 +24,7 @@ export function loadSettings(action: ActionDefinition): ParamValues | undefined 
 export function saveSettings(action: ActionDefinition, values: ParamValues): void {
   const safe: ParamValues = {};
   for (const [key, spec] of Object.entries(action.params)) {
-    const secret = spec.kind === 'text' && spec.secret;
+    const secret = isPrivateParam(spec);
     // Workspace values (page order, crop box …) belong to one file, so they aren't remembered either.
     if (!secret && !isWorkspaceParam(spec)) safe[key] = values[key];
   }

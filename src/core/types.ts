@@ -81,6 +81,21 @@ export interface PositionParam extends ParamBase<string> {
   kind: 'position';
 }
 
+/** A file the user picks for a setting, e.g. a digital ID. Never remembered or saved. */
+export interface FileValue {
+  name: string;
+  bytes: Uint8Array;
+}
+
+export interface FileParam extends ParamBase<FileValue | null> {
+  kind: 'file';
+  /** `accept` attribute for the picker, e.g. `.p12,.pfx`. */
+  accept: string;
+  placeholder?: string;
+  /** Block running until a file is chosen (while the parameter is visible). */
+  required?: boolean;
+}
+
 /**
  * Page order editor: renders thumbnails the user can reorder, rotate and delete.
  * Value is a list of `{ page, rotate }` (1-based pages); empty means "unchanged".
@@ -171,7 +186,8 @@ export type ParamSpec =
   | RegionsParam
   | SignatureParam
   | FormFieldsParam
-  | AnnotationsParam;
+  | AnnotationsParam
+  | FileParam;
 
 export type ParamValue =
   | string
@@ -182,7 +198,9 @@ export type ParamValue =
   | PageBox[]
   | SignatureValue
   | Record<string, string | boolean>
-  | Annotation[];
+  | Annotation[]
+  | FileValue
+  | null;
 export type ParamValues = Record<string, ParamValue>;
 
 /** Named, ready-made parameter set, e.g. "Recommended" or "Extreme". */

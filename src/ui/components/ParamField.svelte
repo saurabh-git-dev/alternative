@@ -4,7 +4,7 @@
   switch, text/password, colour picker or 3×3 position grid.
 -->
 <script lang="ts">
-  import type { ParamSpec, ParamValue, ParamValues } from '../../core/types';
+  import type { FileValue, ParamSpec, ParamValue, ParamValues } from '../../core/types';
   import PositionPicker from './PositionPicker.svelte';
 
   let {
@@ -87,6 +87,23 @@
       </div>
     {:else if spec.kind === 'position'}
       <PositionPicker bind:value={value as string} />
+    {:else if spec.kind === 'file'}
+      {@const picked = value as FileValue | null}
+      <div class="with-unit">
+        <label class="btn pick">
+          {picked ? 'Change…' : (spec.placeholder ?? 'Choose file…')}
+          <input
+            id={inputId}
+            type="file"
+            accept={spec.accept}
+            onchange={async (e) => {
+              const f = e.currentTarget.files?.[0];
+              if (f) value = { name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) };
+            }}
+          />
+        </label>
+        {#if picked}<span class="unit file-name" title={picked.name}>{picked.name}</span>{/if}
+      </div>
     {/if}
   {/if}
 
@@ -159,6 +176,24 @@
   .unit {
     color: var(--text-2);
     font-size: 14px;
+  }
+  .pick {
+    position: relative;
+    padding: 7px 14px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .pick input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
   }
   .segmented {
     display: flex;

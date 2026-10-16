@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyPreset, initialValues, matchingPreset, validate } from '../src/core/params';
+import { applyPreset, isPrivateParam, initialValues, matchingPreset, validate } from '../src/core/params';
 import { ACTIONS } from '../src/actions';
 import { compressPdf } from '../src/actions/pdf/compress';
 import { protectPdf } from '../src/actions/pdf/protect';
@@ -31,8 +31,8 @@ describe('parameter resolution', () => {
     for (const action of ACTIONS) {
       const values = initialValues(action);
       const errors = validate(action, values);
-      // Password fields are intentionally empty until the user types.
-      for (const key of Object.keys(errors)) expect(['password', 'confirm']).toContain(key);
+      // Passwords and picked files are intentionally empty until the user provides them.
+      for (const key of Object.keys(errors)) expect(isPrivateParam(action.params[key]), `${action.id}.${key}`).toBe(true);
     }
   });
 });

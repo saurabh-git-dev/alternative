@@ -22,6 +22,11 @@ export function isWorkspaceParam(spec: ParamSpec): boolean {
   return WORKSPACE_KINDS.has(spec.kind);
 }
 
+/** Values that must never be stored or put in links: passwords and picked files. */
+export function isPrivateParam(spec: ParamSpec): boolean {
+  return (spec.kind === 'text' && !!spec.secret) || spec.kind === 'file';
+}
+
 /** Every parameter at its declared default. */
 export function defaultValues(action: ActionDefinition): ParamValues {
   const values: ParamValues = {};
@@ -42,6 +47,7 @@ export function initialValues(action: ActionDefinition, saved?: ParamValues): Pa
   if (saved) {
     for (const [key, spec] of Object.entries(action.params)) {
       if (isWorkspaceParam(spec)) continue;
+      if (isPrivateParam(spec)) continue;
       if (key in saved && typeof saved[key] === typeof values[key]) values[key] = saved[key];
     }
   }
@@ -80,6 +86,8 @@ export function validate(action: ActionDefinition, values: ParamValues): Record<
       if (!Number.isFinite(n) || n < spec.min || n > spec.max) {
         errors[key] = `Enter a value between ${spec.min} and ${spec.max}.`;
       }
+    } else if (spec.kind === 'file' && spec.required && !value) {
+      errors[key] = 'Choose a file.';
     } else if (spec.kind === 'text' && spec.validate) {
       const message = spec.validate(value as string, values);
       if (message) errors[key] = message;

@@ -62,3 +62,17 @@ libraries directly, so swapping an engine touches one file.
 - `downscale`: fast browser resampling for live previews only.
 - Remove photo info strips JPEG APPn/COM segments and PNG text/EXIF chunks
   without touching pixels; EXIF-rotated JPEGs are rotated upright first.
+
+## Digital signatures (`signing.ts`)
+
+Certificate signing uses [node-forge](https://github.com/digitalbazaar/forge) for the
+PKCS#12 digital ID and the CMS (PKCS#7) signature, and pdf-lib to write the signature
+field. The PDF is saved with a fixed-size `/Contents` placeholder, the `/ByteRange`
+is filled in, the covered bytes are hashed with SHA-256, and the detached
+`adbe.pkcs7.detached` signature is written into the placeholder. A new self-signed
+ID uses a WebCrypto RSA-2048 key and is returned as a password-protected .p12.
+
+Only signing happens here; verification is left to the reader's PDF viewer
+(node-forge's known verification issues don't apply). Signing re-saves the file, so
+any earlier signatures stop validating; the action warns when the input had some.
+Output was checked with pyHanko: intact, valid, coverage of the entire file.

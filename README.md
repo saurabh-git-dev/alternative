@@ -11,7 +11,7 @@ your device with WebAssembly engines and are never uploaded.
 | Optimize PDF | Compress, Repair, Fast web view |
 | Convert PDF | PDF → JPG/PNG, Images → PDF, OCR (make scanned PDFs searchable), PDF → PDF/A (archival) |
 | Edit PDF | Annotate (text, highlight, pen, shapes, arrows, white-out, comments), Sign, Fill forms, Watermark, Page numbers, Metadata, Compare two PDFs (text and visual) |
-| PDF security | Protect (AES-256), Unlock, Redact (true removal) |
+| PDF security | Protect (AES-256), Unlock, Redact (true removal), Digitally sign (certificate, .p12/.pfx) |
 | Images | Compress, Resize, Crop, Convert, Photo editor, Rotate, Watermark, Remove photo info, Image → text (OCR) |
 | Automate | Pipelines: chain tools and run them in one go, with ready-made recipes |
 | Share | Share as link or QR code: any small file, or pasted text, CSV or JSON, packed into the link itself |
