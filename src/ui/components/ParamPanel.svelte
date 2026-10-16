@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
   import type { ActionDefinition, ParamValues } from '../../core/types';
-  import { applyPreset, initialValues, isVisible, matchingPreset } from '../../core/params';
+  import { applyPreset, initialValues, isVisible, isWorkspaceParam, matchingPreset } from '../../core/params';
   import ParamField from './ParamField.svelte';
 
   let {
@@ -15,7 +15,7 @@
     errors,
   }: { action: ActionDefinition; values: ParamValues; errors: Record<string, string> } = $props();
 
-  const entries = $derived(Object.entries(action.params).filter(([, s]) => s.kind !== 'pageOrder'));
+  const entries = $derived(Object.entries(action.params).filter(([, s]) => !isWorkspaceParam(s)));
   const basic = $derived(entries.filter(([, s]) => !s.advanced));
   const advanced = $derived(entries.filter(([, s]) => s.advanced));
   const recommended = $derived(initialValues(action));
@@ -25,8 +25,8 @@
 
   function reset() {
     const fresh = initialValues(action);
-    // Keep per-document values such as page order.
-    for (const [key, spec] of Object.entries(action.params)) if (spec.kind === 'pageOrder') fresh[key] = values[key];
+    // Keep per-document values such as page order or crop box.
+    for (const [key, spec] of Object.entries(action.params)) if (isWorkspaceParam(spec)) fresh[key] = values[key];
     values = fresh;
   }
 

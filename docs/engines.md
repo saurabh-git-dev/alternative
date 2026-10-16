@@ -34,3 +34,27 @@ libraries directly, so swapping an engine touches one file.
 - Watermark text is vector (Helvetica), drawn over the page with opacity.
 - Images → PDF embeds JPEG/PNG bytes unchanged; other formats are converted.
   EXIF-rotated or CMYK JPEGs are re-encoded upright as RGB.
+
+## Tesseract.js (`ocr.ts`)
+- Worker and WASM cores are served from `/vendor/tesseract` (copied by the
+  `vendorFiles` plugin in `vite.config.ts`); the worker picks the SIMD core
+  the CPU supports.
+- LSTM-only "best_int" models. English is bundled; other languages load from
+  jsDelivr once and are cached in IndexedDB.
+- OCR PDF uses the OCRmyPDF "sandwich": MuPDF renders the page at 300 dpi,
+  Tesseract produces a text-only PDF page (invisible text in a glyph-less
+  font, so every script works), and pdf-lib overlays it on the original page.
+  The page itself is never re-encoded.
+
+## MuPDF redaction (`mupdf.ts` → `redact`)
+- Redact annotations are added for drawn boxes and text-search hits, then
+  `applyRedactions` removes covered text, image pixels and line art.
+- Covered images are rewritten losslessly, so redacting over a photo can
+  make the file larger.
+
+## Image editing (`image.ts`)
+- `adjust`: brightness, contrast, shadows/highlights, warmth, saturation,
+  filter and vignette in one pass, in that order.
+- `downscale`: fast browser resampling for live previews only.
+- Remove photo info strips JPEG APPn/COM segments and PNG text/EXIF chunks
+  without touching pixels; EXIF-rotated JPEGs are rotated upright first.

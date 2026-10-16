@@ -3,6 +3,24 @@
  */
 import type { ActionDefinition, ParamSpec, ParamValues } from './types';
 
+/**
+ * Parameter kinds edited directly on the document (page grid, crop box,
+ * redaction boxes, signature, form). They render in the main workspace rather
+ * than the settings panel, and are never remembered between visits because
+ * they belong to one specific file.
+ */
+export const WORKSPACE_KINDS: ReadonlySet<ParamSpec['kind']> = new Set([
+  'pageOrder',
+  'crop',
+  'regions',
+  'signature',
+  'formFields',
+]);
+
+export function isWorkspaceParam(spec: ParamSpec): boolean {
+  return WORKSPACE_KINDS.has(spec.kind);
+}
+
 /** Every parameter at its declared default. */
 export function defaultValues(action: ActionDefinition): ParamValues {
   const values: ParamValues = {};
@@ -21,7 +39,8 @@ export function initialValues(action: ActionDefinition, saved?: ParamValues): Pa
   const preset = action.presets?.find((p) => p.id === action.defaultPreset);
   if (preset) Object.assign(values, preset.values);
   if (saved) {
-    for (const key of Object.keys(action.params)) {
+    for (const [key, spec] of Object.entries(action.params)) {
+      if (isWorkspaceParam(spec)) continue;
       if (key in saved && typeof saved[key] === typeof values[key]) values[key] = saved[key];
     }
   }

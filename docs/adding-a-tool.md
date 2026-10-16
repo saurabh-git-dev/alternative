@@ -56,6 +56,21 @@ export const grayscalePdf: ActionDefinition = {
 | `color` | colour picker | `#rrggbb` |
 | `position` | 3×3 grid | `top-left` … `bottom-right` |
 | `pageOrder` | thumbnail page editor | value is `{ page, rotate }[]` |
+| `crop` | crop box on the first image | value is a `Box` in fractions (0–1) |
+| `regions` | boxes drawn on PDF pages | value is `PageBox[]` (fractions, top-left origin) |
+| `signature` | signature pad + placement on pages | value is `{ image, placements }` |
+| `formFields` | the PDF's own form fields | value is `{ [fieldName]: string \| boolean }` |
+
+The last five are *workspace* kinds: they render in the main area instead of
+the settings panel, reset when a new file is loaded, and are never
+remembered. A tool has at most one.
+
+## Optional hooks
+
+- `inspect(file)`: return values to prefill from the first file (e.g. Edit
+  metadata shows the current title). Runs in the preview worker.
+- `livePreview: true`: image tools get a live preview of the first image,
+  re-rendered on a downscaled copy whenever a setting changes.
 
 Any parameter can set `advanced: true` (goes in the drawer), `help` (hint
 text) and `visibleWhen: (values) => boolean`.

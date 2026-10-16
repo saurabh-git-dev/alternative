@@ -5,15 +5,21 @@
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { ActionDefinition, OutputFile, PageRef, ParamValues } from '../../core/types';
+  import type { ActionDefinition, Box, OutputFile, PageBox, PageRef, ParamValues, SignatureValue } from '../../core/types';
   import { initialValues, validate } from '../../core/params';
   import { accepts, detectType, readFile } from '../../core/files';
-  import { CancelledError, inspectPdf, pdfThumbnails, runAction, type JobHandle } from '../../core/runner';
+  import { CancelledError, inspectAction, inspectPdf, pdfThumbnails, runAction, type JobHandle } from '../../core/runner';
   import { loadSettings, saveSettings } from '../settings';
   import Dropzone from '../components/Dropzone.svelte';
   import FileList, { type Item } from '../components/FileList.svelte';
   import ParamPanel from '../components/ParamPanel.svelte';
   import PageOrderEditor from '../components/PageOrderEditor.svelte';
+  import RegionEditor from '../components/RegionEditor.svelte';
+  import SignatureEditor from '../components/SignatureEditor.svelte';
+  import FormEditor from '../components/FormEditor.svelte';
+  import CropEditor from '../components/CropEditor.svelte';
+  import LivePreview from '../components/LivePreview.svelte';
+  import { isWorkspaceParam } from '../../core/params';
   import Results from '../components/Results.svelte';
 
   let { action, initialFiles = [] }: { action: ActionDefinition; initialFiles?: File[] } = $props();
@@ -30,7 +36,9 @@
 
   const acceptAttr = $derived(action.accepts.join(','));
   const single = $derived(action.mode === 'each' && action.maxFiles === 1);
-  const orderKey = $derived(Object.entries(action.params).find(([, s]) => s.kind === 'pageOrder')?.[0]);
+  /** The parameter edited directly on the document, if this tool has one. */
+  const workspace = $derived(Object.entries(action.params).find(([, s]) => isWorkspaceParam(s)));
+  const orderKey = $derived(workspace?.[1].kind === 'pageOrder' ? workspace[0] : undefined);
 
   const errors = $derived(validate(action, values));
   const minFiles = $derived(action.minFiles ?? 1);
@@ -51,8 +59,23 @@
     const room = action.maxFiles ? action.maxFiles - (single ? 0 : items.length) : Infinity;
     const take = ok.slice(0, Math.max(0, room));
     const fresh: Item[] = await Promise.all(take.map(async (f) => ({ id: crypto.randomUUID(), data: await readFile(f) })));
+    const wasEmpty = items.length === 0 || single;
     items = single ? fresh : [...items, ...fresh];
     for (const item of fresh) describe(item.id);
+    if (wasEmpty && fresh[0]) prefill(fresh[0]);
+  }
+
+  /** Reset per-document values and let the action prefill from the first file. */
+  async function prefill(item: Item) {
+    for (const [key, spec] of Object.entries(action.params)) {
+      if (isWorkspaceParam(spec)) values[key] = structuredClone(spec.default) as never;
+    }
+    if (!action.inspect) return;
+    try {
+      Object.assign(values, await inspectAction(action.id, $state.snapshot(item.data) as Item['data']));
+    } catch {
+      /* unreadable file: the run will report a clear error */
+    }
   }
 
   /** Fill in page count / thumbnail / encryption status in the background. */
@@ -68,7 +91,7 @@
         current.pages = info.pageCount;
         current.encrypted = info.encrypted;
         if (!info.encrypted) current.thumb = (await pdfThumbnails(item.data.bytes, [1], 120))[0];
-        if (orderKey && !info.encrypted) {
+        if (orderKey && !info.encrypted && current === items[0]) {
           values[orderKey] = Array.from({ length: info.pageCount }, (_, i): PageRef => ({ page: i + 1, rotate: 0 }));
         }
       } catch {
@@ -125,14 +148,30 @@
           onFiles={addFiles}
         />
       {:else}
-        {#if orderKey && items[0]?.pages}
-          <PageOrderEditor
-            bytes={items[0].data.bytes}
-            pageCount={items[0].pages}
-            order={values[orderKey] as PageRef[]}
-            onChange={(order) => (values[orderKey] = order)}
-          />
+        {@const first = items[0]}
+        {#if workspace && !first.encrypted && !first.error}
+          {@const [key, spec] = workspace}
+          {#if spec.kind === 'crop'}
+            {#if first.thumb}
+              <CropEditor src={first.thumb} box={values[key] as Box} onChange={(v) => (values[key] = v)} />
+            {/if}
+            {#if items.length > 1}<p class="muted note">The same crop is applied to all {items.length} images.</p>{/if}
+            <FileList bind:items />
+          {:else if !first.pages}
+            <p class="muted">Opening document…</p>
+          {:else if spec.kind === 'pageOrder'}
+            <PageOrderEditor bytes={first.data.bytes} pageCount={first.pages} order={values[key] as PageRef[]} onChange={(v) => (values[key] = v)} />
+          {:else if spec.kind === 'regions'}
+            <RegionEditor bytes={first.data.bytes} pageCount={first.pages} regions={values[key] as PageBox[]} onChange={(v) => (values[key] = v)} />
+          {:else if spec.kind === 'signature'}
+            <SignatureEditor bytes={first.data.bytes} pageCount={first.pages} value={values[key] as SignatureValue} onChange={(v) => (values[key] = v)} />
+          {:else if spec.kind === 'formFields'}
+            <FormEditor bytes={first.data.bytes} values={values[key] as Record<string, string | boolean>} onChange={(v) => (values[key] = v)} />
+          {/if}
         {:else}
+          {#if action.livePreview && first.data.type.startsWith('image/')}
+            <LivePreview actionId={action.id} file={first.data} {values} />
+          {/if}
           <FileList bind:items reorderable={action.mode === 'all'} />
         {/if}
         {#if !single}
@@ -257,6 +296,10 @@
     border-radius: var(--radius-sm);
     background: var(--danger-soft);
     color: var(--danger);
+    font-size: 14px;
+  }
+  .note {
+    margin: 0;
     font-size: 14px;
   }
   .warn {
