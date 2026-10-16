@@ -44,6 +44,12 @@ export interface RenderOptions {
   /** Render with a transparent background instead of white (PNG only). */
   transparent?: boolean;
   password?: string;
+  /**
+   * Upper bound on pixels per page. Pages larger than this are rendered at a
+   * lower resolution instead. Phone scanner apps often make pages several
+   * metres wide (one point per pixel), which would otherwise run out of memory.
+   */
+  maxPixels?: number;
 }
 
 /**
@@ -62,12 +68,12 @@ export async function renderPages(
     doc.destroy();
     throw new Error('This PDF is password-protected. Unlock it first.');
   }
-  const scale = options.dpi / 72;
   const alpha = options.format === 'png' && !!options.transparent;
   const results: Uint8Array[] = [];
   try {
     pages.forEach((pageNumber, index) => {
       const page = doc.loadPage(pageNumber - 1);
+      const scale = renderScale(page.getBounds(), options);
       const pixmap = page.toPixmap(mupdf.Matrix.scale(scale, scale), mupdf.ColorSpace.DeviceRGB, alpha, true);
       const image = options.format === 'png' ? pixmap.asPNG() : pixmap.asJPEG(options.quality ?? 90, false);
       results.push(image.slice());
@@ -79,6 +85,13 @@ export async function renderPages(
     doc.destroy();
   }
   return results;
+}
+
+/** Points-to-pixels scale for one page: the requested dpi, capped by `maxPixels`. */
+function renderScale([x0, y0, x1, y1]: number[], options: RenderOptions): number {
+  const scale = options.dpi / 72;
+  const pixels = (x1 - x0) * (y1 - y0) * scale * scale;
+  return options.maxPixels && pixels > options.maxPixels ? scale * Math.sqrt(options.maxPixels / pixels) : scale;
 }
 
 /** Small JPEG thumbnails at a given pixel width, for page grids and previews. */

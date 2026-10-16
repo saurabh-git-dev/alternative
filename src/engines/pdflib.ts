@@ -10,14 +10,33 @@ export async function loadPdfLib() {
   return import('pdf-lib');
 }
 
-/** Open a PDF for editing, with a plain-language error for password-protected files. */
+/**
+ * Open a PDF for editing.
+ *
+ * pdf-lib can't read encrypted files or some damaged ones, so on failure the
+ * file is first rewritten by qpdf: that removes encryption that has no open
+ * password (common on bank statements and official forms, which open without
+ * a password but forbid editing) and repairs broken structure. Only a real
+ * open password produces the "Unlock it first" message.
+ */
 export async function loadPdf(bytes: Uint8Array) {
   const { PDFDocument } = await import('pdf-lib');
   try {
     return await PDFDocument.load(bytes);
-  } catch (e) {
-    if (/encrypted/i.test(String(e))) throw new Error('This PDF is password-protected. Unlock it first.');
-    throw new Error("This PDF couldn't be read. Try Repair PDF first.");
+  } catch (first) {
+    const { runQpdf } = await import('./qpdf');
+    let rewritten: Uint8Array;
+    try {
+      [rewritten] = await runQpdf({ inputs: [bytes], args: ['--decrypt', '{in0}', '{out}'] });
+    } catch (e) {
+      if (/password/i.test(String(e))) throw new Error('This PDF is password-protected. Unlock it first.');
+      throw new Error("This PDF couldn't be read. Try Repair PDF first.");
+    }
+    try {
+      return await PDFDocument.load(rewritten);
+    } catch {
+      throw new Error(/encrypted/i.test(String(first)) ? 'This PDF is password-protected. Unlock it first.' : "This PDF couldn't be read. Try Repair PDF first.");
+    }
   }
 }
 
