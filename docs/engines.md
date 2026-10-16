@@ -76,3 +76,25 @@ Only signing happens here; verification is left to the reader's PDF viewer
 (node-forge's known verification issues don't apply). Signing re-saves the file, so
 any earlier signatures stop validating; the action warns when the input had some.
 Output was checked with pyHanko: intact, valid, coverage of the entire file.
+
+## AI models (`onnx.ts`, `ai-image.ts`)
+
+ONNX Runtime Web runs the models, on the GPU through WebGPU when the browser
+offers it and on the CPU (WASM, multi-threaded when cross-origin isolated)
+otherwise. Models are served from `/vendor/models/`, downloaded on first use with
+progress, and stored in Cache Storage (`formatter-models-v1`), so later runs are
+offline. Each job's worker loads a model once and reuses it for every file.
+
+- **Remove background**: BRIA RMBG-1.4, 8-bit quantised (npm `@rmbg/model-briaai`,
+  five 9 MB parts). The image is squeezed to 1024 × 1024, the predicted matte is
+  stretched to 0–1 and resized back with bilinear filtering, then used as alpha.
+  "Edge cleanup" ramps the matte to drop a faint fringe. In a side-by-side test
+  against IS-Net (imgly's model, 44 and 88 MB variants) RMBG kept whole subjects
+  where IS-Net left parts semi-transparent. RMBG-1.4 is licensed for
+  non-commercial use only (CC BY-NC 4.0).
+- **Upscale**: Real-ESRGAN `realesr-general-x4v3` blended 50/50 with its
+  denoising twin, converted to ONNX by `tools/convert-realesrgan.py` and committed
+  as `models/realesr-general-x4.onnx` (5 MB). It runs on 192 px tiles with 12 px
+  of overlap that is discarded, so seams don't show and memory stays flat.
+  2× and 3× shrink the 4× result with Lanczos. Transparency is enlarged with
+  Lanczos since the model only sees colour. Results over 80 MP are refused.

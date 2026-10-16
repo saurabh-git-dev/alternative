@@ -104,7 +104,7 @@
 </main>
 
 <footer class="muted">
-  Open source, AGPL-3.0. Powered by qpdf, MuPDF, Ghostscript, pdf-lib and the Squoosh codecs.
+  Open source, AGPL-3.0. Powered by qpdf, MuPDF, Ghostscript, pdf-lib, the Squoosh codecs and ONNX Runtime.
 </footer>
 
 <style>

@@ -33,6 +33,8 @@ import { editImage } from './image/edit';
 import { cropImage } from './image/crop';
 import { stripMetadata } from './image/metadata';
 import { ocrImage } from './image/ocr';
+import { removeBackground } from './image/remove-background';
+import { upscaleImage } from './image/upscale';
 
 /** Order here is the order on the home page (within each category). */
 export const ACTIONS: ActionDefinition[] = [
@@ -60,6 +62,8 @@ export const ACTIONS: ActionDefinition[] = [
   compressImage,
   resizeImage,
   cropImage,
+  removeBackground,
+  upscaleImage,
   convertImage,
   editImage,
   rotateImage,

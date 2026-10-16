@@ -12,7 +12,7 @@ your device with WebAssembly engines and are never uploaded.
 | Convert PDF | PDF → JPG/PNG, Images → PDF, OCR (make scanned PDFs searchable), PDF → PDF/A (archival) |
 | Edit PDF | Annotate (text, highlight, pen, shapes, arrows, white-out, comments), Sign, Fill forms, Watermark, Page numbers, Metadata, Compare two PDFs (text and visual) |
 | PDF security | Protect (AES-256), Unlock, Redact (true removal), Digitally sign (certificate, .p12/.pfx) |
-| Images | Compress, Resize, Crop, Convert, Photo editor, Rotate, Watermark, Remove photo info, Image → text (OCR) |
+| Images | Compress, Resize, Crop, Remove background (AI), Upscale 2–4× (AI), Convert, Photo editor, Rotate, Watermark, Remove photo info, Image → text (OCR) |
 | Automate | Pipelines: chain tools and run them in one go, with ready-made recipes |
 | Share | Share as link or QR code: any small file, or pasted text, CSV or JSON, packed into the link itself |
 
@@ -59,6 +59,9 @@ still works without them, just single-threaded.
 | [pdf-lib](https://pdf-lib.js.org/) | watermark, images → PDF | MIT | 0.4 MB |
 | [jSquash](https://github.com/jamsinclair/jSquash) (Squoosh codecs) | MozJPEG, WebP, AVIF, OxiPNG, resize | Apache-2.0 | per codec |
 | [Tesseract.js](https://tesseract.projectnaptha.com/) | OCR for images and scanned PDFs | Apache-2.0 | 4 MB + 3 MB per language |
+| [ONNX Runtime Web](https://onnxruntime.ai/) | runs the AI models (WebGPU, or WASM on the CPU) | MIT | 22 MB |
+| [BRIA RMBG-1.4](https://huggingface.co/briaai/RMBG-1.4) | background removal model | CC BY-NC 4.0 (non-commercial) | 44 MB |
+| [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) general x4v3 | upscaling model | BSD-3-Clause | 5 MB |
 
 Engines load only when a tool needs them and are cached by the browser after.
 English OCR data ships with the app; other OCR languages are fetched once from
