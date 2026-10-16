@@ -32,7 +32,10 @@ Requires Node 20+.
 
 ### Hosting
 
-`dist/` is a static site that works from any sub-path. For full speed, the host
+Pushing to `main` deploys to GitHub Pages via `.github/workflows/deploy.yml`
+(enable it once under Settings → Pages → Source: GitHub Actions).
+
+`dist/` is a static site that works from any sub-path, so any static host works. For full speed, the host
 should send these headers (they enable multi-threaded WASM):
 
 ```
