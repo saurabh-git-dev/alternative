@@ -88,7 +88,13 @@ export const ocrPdf: ActionDefinition = {
     for (const [i, pageNumber] of todo.entries()) {
       const report = (f: number, m: string) => ctx.progress((i + f) / todo.length, m);
       report(0, `Reading page ${pageNumber} (${i + 1} of ${todo.length})`);
-      const [png] = await mupdfEngine.renderPages(file.bytes, [pageNumber], { dpi: params.dpi as number, format: 'png' });
+      const [png] = await mupdfEngine.renderPages(file.bytes, [pageNumber], {
+        dpi: params.dpi as number,
+        format: 'png',
+        // Twice an A4 page at the chosen dpi: real paper sizes up to A3 render
+        // at full resolution, oversized "pixel" pages are scaled down to fit.
+        maxPixels: 2 * 8.27 * 11.69 * (params.dpi as number) ** 2,
+      });
       const result = await recognize(new Blob([png as BlobPart], { type: 'image/png' }), langs, {
         pdf: true,
         pdfTextOnly: true,
