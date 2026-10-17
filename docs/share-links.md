@@ -44,3 +44,39 @@ re-encodes as AVIF at the largest size that reaches reasonable quality
 (`fitToBytes` in `src/engines/image.ts`). The original is untouched.
 
 A damaged or truncated link shows a clear error rather than a broken file.
+
+## Direct transfers (any size)
+
+Files too big for a link go straight from one browser to the other over
+WebRTC (`src/core/direct.ts`, page `src/ui/pages/Direct.svelte`):
+
+- **Send to your phone** (`#/direct`): pick files, show a QR code; the device
+  that scans it receives them.
+- **Get files from your phone** (`#/direct/receive`): show a QR code; the
+  device that scans it picks files and sends them back.
+
+The QR code holds `<app>#/d/<id>.<secret>.<s|r>`: a random single-use peer
+ID, a 128-bit secret and the direction. A free public matchmaker (PeerJS's
+cloud server) passes connection details between the two browsers; it never
+sees the files, and never sees the secret, because URL fragments aren't sent
+to servers. On networks that block direct connections, PeerJS's free TURN
+relay carries the traffic, still encrypted.
+
+Security (`src/core/direct-crypto.ts`):
+
+1. WebRTC's own DTLS encryption protects the connection.
+2. Both sides send `HMAC-SHA256(secret, role | own DTLS fingerprint | peer
+   fingerprint)` and check the other's. A matchmaker that tried to sit in the
+   middle would hold two DTLS sessions with different fingerprints, so the
+   check fails and nothing is sent. Without the secret it can't forge a tag.
+3. Every message is also sealed with AES-256-GCM, one HKDF-derived key per
+   direction and a message counter as the nonce, so frames can't be read,
+   altered, replayed or reordered.
+
+Files stream in 64 KB pieces with back-pressure, so memory stays flat on the
+sender; the receiver assembles them into a `File` (browsers keep big blobs on
+disk). A 12 MB file takes about 3 s between two tabs.
+
+To use your own matchmaker (or test locally with `npx peer --port 9000`),
+store PeerJS options in localStorage:
+`localStorage['formatter-peer-server'] = '{"host":"localhost","port":9000,"path":"/","secure":false}'`.

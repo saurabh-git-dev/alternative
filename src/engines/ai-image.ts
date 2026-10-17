@@ -15,6 +15,7 @@
  */
 import { infer, loadModel, type ModelSpec, type ProgressFn } from './onnx';
 import { resize } from './image';
+import { pixelBudget } from '../core/device';
 
 export const RMBG_MODEL: ModelSpec = {
   id: 'rmbg-1.4-quantized',
@@ -119,15 +120,17 @@ const MODEL_SCALE = 4;
 const TILE = 192;
 const PAD = 12;
 
-/** Largest result, in pixels, before memory gets risky in a browser tab. */
+/** Largest result, in pixels, before memory gets risky in a desktop browser tab (phones get less, see device.ts). */
 export const MAX_UPSCALED_PIXELS = 80_000_000;
 
 /** Enlarge with Real-ESRGAN, then shrink to the requested scale if below 4×. */
 export async function upscale(image: ImageData, scale: number, onProgress?: ProgressFn): Promise<ImageData> {
   const { width: w, height: h } = image;
-  if (w * h * MODEL_SCALE * MODEL_SCALE > MAX_UPSCALED_PIXELS) {
-    const maxSide = Math.floor(Math.sqrt(MAX_UPSCALED_PIXELS / 16));
-    throw new Error(`This image is too large to upscale in the browser. Resize it to about ${maxSide} × ${maxSide} pixels or less first.`);
+  const budget = pixelBudget(MAX_UPSCALED_PIXELS);
+  if (w * h * MODEL_SCALE * MODEL_SCALE > budget) {
+    const maxSide = Math.floor(Math.sqrt(budget / 16));
+    const where = budget < MAX_UPSCALED_PIXELS ? 'on this device' : 'in the browser';
+    throw new Error(`This image is too large to upscale ${where}. Resize it to about ${maxSide} × ${maxSide} pixels or less first.`);
   }
   const session = await loadModel(UPSCALE_MODEL, (f, m) => onProgress?.(f * 0.1, m));
   const W = w * MODEL_SCALE;

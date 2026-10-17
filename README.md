@@ -14,11 +14,16 @@ your device with WebAssembly engines and are never uploaded.
 | PDF security | Protect (AES-256), Unlock, Redact (true removal), Digitally sign (certificate, .p12/.pfx) |
 | Images | Compress, Resize, Crop, Remove background (AI), Upscale 2–4× (AI), Convert, Photo editor, Rotate, Watermark, Remove photo info, Image → text (OCR) |
 | Automate | Pipelines: chain tools and run them in one go, with ready-made recipes |
-| Share | Share as link or QR code: any small file, or pasted text, CSV or JSON, packed into the link itself |
+| Share | Share as link or QR code: any small file, or pasted text, CSV or JSON, packed into the link itself. Send to / get files from your phone: any size, straight between devices, end-to-end encrypted |
 
 Every tool opens with recommended settings. Presets cover the common cases,
 and an **Advanced settings** drawer exposes every parameter. Your last-used
 settings are remembered per tool (passwords never are).
+
+Everything works on phones too. Tools that download large engines or need a
+lot of memory (AI background removal and upscaling, OCR, Ghostscript
+compression) show a heads-up on phones and low-memory computers, and use
+safer limits there.
 
 ## Getting started
 
@@ -73,7 +78,7 @@ jsDelivr when first used, then cached.
 - [Adding a tool](docs/adding-a-tool.md): step-by-step guide
 - [Engines](docs/engines.md): what each engine does, defaults, and why
 - [Pipelines](docs/pipelines.md): chaining tools, type checks, recipes
-- [Share links](docs/share-links.md): the link and QR formats, and their size limits
+- [Share links](docs/share-links.md): the link and QR formats, their size limits, and direct transfers for big files
 
 ## License
 

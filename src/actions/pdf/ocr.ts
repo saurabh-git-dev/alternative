@@ -25,6 +25,7 @@ export const ocrPdf: ActionDefinition = {
   mode: 'each',
   verb: 'Make searchable',
   engines: ['Tesseract.js', 'mupdf', 'pdf-lib'],
+  demanding: 'Downloads text-recognition data and reads each page in turn, so long documents can take minutes on a phone.',
   params: {
     language: {
       kind: 'enum',

@@ -19,6 +19,9 @@
   } = $props();
 
   let over = $state(false);
+  /** Phones and tablets can't drag files in, so the wording says "choose" instead. */
+  const touch = typeof matchMedia !== 'undefined' && matchMedia('(hover: none) and (pointer: coarse)').matches;
+  const shownLabel = $derived(touch ? label.replace(/^Drop /, 'Choose ').replace(/ here$/, '') : label);
   let input: HTMLInputElement;
 
   function take(list: FileList | null | undefined) {
@@ -55,8 +58,12 @@
 >
   <input bind:this={input} type="file" {accept} {multiple} hidden onchange={(e) => take(e.currentTarget.files)} />
   {#if !compact}<div class="big" aria-hidden="true">⬆</div>{/if}
-  <div class="label">{label}</div>
-  <div class="hint muted">or <span class="link">choose {multiple ? 'files' : 'a file'}</span>{paste ? ' · you can also paste' : ''}</div>
+  <div class="label">{shownLabel}</div>
+  {#if touch}
+    <div class="hint muted"><span class="link">Tap to browse</span></div>
+  {:else}
+    <div class="hint muted">or <span class="link">choose {multiple ? 'files' : 'a file'}</span>{paste ? ' · you can also paste' : ''}</div>
+  {/if}
 </div>
 
 <style>
