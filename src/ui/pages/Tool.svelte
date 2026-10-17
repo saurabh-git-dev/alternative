@@ -22,6 +22,7 @@
   import LivePreview from '../components/LivePreview.svelte';
   import { isWorkspaceParam } from '../../core/params';
   import Results from '../components/Results.svelte';
+  import { isConstrained } from '../../core/device';
 
   let { action, initialFiles = [] }: { action: ActionDefinition; initialFiles?: File[] } = $props();
 
@@ -36,6 +37,8 @@
   let error = $state<string | null>(null);
 
   const acceptAttr = $derived(action.accepts.join(','));
+  /** Shown only on phones and low-memory computers, where heavy tools may struggle. */
+  const deviceWarning = $derived(action.demanding && isConstrained() ? action.demanding : null);
   const single = $derived(action.mode === 'each' && action.maxFiles === 1);
   /** The parameter edited directly on the document, if this tool has one. */
   const workspace = $derived(Object.entries(action.params).find(([, s]) => isWorkspaceParam(s)));
@@ -134,6 +137,9 @@
     <p class="muted">{action.description}</p>
   </div>
 </div>
+{#if deviceWarning}
+  <p class="device-warning" role="note"><strong>Heads up on this device:</strong> {deviceWarning} A computer works best for big files.</p>
+{/if}
 
 {#if results}
   <Results {results} inputs={items.map((i) => i.data)} onReset={reset} onBack={() => (results = null)} />
@@ -252,6 +258,14 @@
   .head p {
     margin: 2px 0 0;
   }
+  .device-warning {
+    margin: -8px 0 20px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+    font-size: 14px;
+  }
   .layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 340px;
@@ -327,6 +341,23 @@
     }
     .panel {
       position: static;
+    }
+  }
+  @media (max-width: 560px) {
+    .head {
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .head .icon {
+      font-size: 24px;
+      width: 44px;
+      height: 44px;
+    }
+    h1 {
+      font-size: 21px;
+    }
+    .head p {
+      font-size: 14px;
     }
   }
 </style>

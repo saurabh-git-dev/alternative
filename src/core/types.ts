@@ -256,6 +256,11 @@ export interface ActionDefinition {
   /** Which engine(s) the action loads, shown in "How it works". */
   engines: string[];
   /**
+   * Why this tool may struggle on a phone or low-memory computer, e.g. a large
+   * download or heavy memory use. Shown as a warning on such devices only.
+   */
+  demanding?: string;
+  /**
    * Optional: read the first file and return parameter values to prefill,
    * e.g. a PDF's current metadata. Runs in the preview worker.
    */

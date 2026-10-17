@@ -18,6 +18,7 @@ export const upscaleImage: ActionDefinition = {
   mode: 'each',
   verb: 'Upscale',
   engines: ['Real-ESRGAN', 'ONNX Runtime'],
+  demanding: 'Runs an AI model on every part of the image. On phones it is slow and large images are limited to keep memory safe.',
   params: {
     scale: {
       kind: 'enum',

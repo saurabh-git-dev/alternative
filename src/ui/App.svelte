@@ -158,6 +158,9 @@
     padding: 24px 16px 40px;
   }
   @media (max-width: 560px) {
+    main {
+      padding-top: 16px;
+    }
     .badge {
       display: none;
     }

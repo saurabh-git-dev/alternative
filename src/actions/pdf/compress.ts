@@ -29,6 +29,7 @@ export const compressPdf: ActionDefinition = {
   mode: 'each',
   verb: 'Compress',
   engines: ['ghostscript', 'qpdf'],
+  demanding: 'Loads a 15 MB PDF engine and can use a lot of memory on large or image-heavy PDFs.',
   defaultPreset: 'recommended',
   presets: [
     { id: 'light', label: 'Light', description: 'Print quality, smaller savings (300 dpi images)', values: { level: 'light' } },

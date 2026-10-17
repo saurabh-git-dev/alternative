@@ -36,6 +36,7 @@ export const pdfToPdfa: ActionDefinition = {
   mode: 'each',
   verb: 'Convert to PDF/A',
   engines: ['Ghostscript'],
+  demanding: 'Loads a 15 MB PDF engine and can use a lot of memory on large PDFs.',
   params: {
     level: {
       kind: 'enum',

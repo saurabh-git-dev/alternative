@@ -20,6 +20,7 @@ export const removeBackground: ActionDefinition = {
   produces: (type, p) =>
     p.fill === 'color' ? (['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(type) ? type : 'image/png') : (p.format as string),
   engines: ['RMBG-1.4', 'ONNX Runtime'],
+  demanding: 'Downloads a 44 MB AI model the first time and needs a lot of memory, so it can be slow or fail on phones.',
   params: {
     fill: {
       kind: 'enum',
