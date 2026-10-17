@@ -1,12 +1,14 @@
 /**
- * Per-tool remembered settings and the app theme, kept in localStorage.
+ * Per-tool remembered settings, saved pipelines and the app theme, kept in
+ * localStorage.
  *
  * Secret parameters (passwords) are never stored. Storage can be unavailable
  * (private mode, blocked site data), so every access is wrapped in try/catch
  * and the app works the same without it.
  */
 import type { ActionDefinition, ParamValues } from '../core/types';
-import { isWorkspaceParam } from '../core/params';
+import { withoutSecrets, type Pipeline } from '../core/pipeline';
+import { isPrivateParam, isWorkspaceParam } from '../core/params';
 
 const PREFIX = 'formatter:';
 
@@ -22,7 +24,7 @@ export function loadSettings(action: ActionDefinition): ParamValues | undefined 
 export function saveSettings(action: ActionDefinition, values: ParamValues): void {
   const safe: ParamValues = {};
   for (const [key, spec] of Object.entries(action.params)) {
-    const secret = spec.kind === 'text' && spec.secret;
+    const secret = isPrivateParam(spec);
     // Workspace values (page order, crop box …) belong to one file, so they aren't remembered either.
     if (!secret && !isWorkspaceParam(spec)) safe[key] = values[key];
   }
@@ -59,5 +61,37 @@ export function saveTheme(theme: Theme): void {
     localStorage.setItem(`${PREFIX}theme`, theme);
   } catch {
     /* ignore */
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Saved pipelines (passwords stripped, see core/pipeline.ts)
+// ---------------------------------------------------------------------------
+
+
+export function loadPipelines(): Pipeline[] {
+  try {
+    const raw = localStorage.getItem(`${PREFIX}pipelines`);
+    return raw ? (JSON.parse(raw) as Pipeline[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Save under its name, replacing a saved pipeline with the same name. */
+export function savePipeline(pipeline: Pipeline): void {
+  const rest = loadPipelines().filter((p) => p.name !== pipeline.name);
+  writePipelines([withoutSecrets(pipeline), ...rest]);
+}
+
+export function deletePipeline(name: string): void {
+  writePipelines(loadPipelines().filter((p) => p.name !== name));
+}
+
+function writePipelines(list: Pipeline[]): void {
+  try {
+    localStorage.setItem(`${PREFIX}pipelines`, JSON.stringify(list));
+  } catch {
+    /* storage unavailable */
   }
 }

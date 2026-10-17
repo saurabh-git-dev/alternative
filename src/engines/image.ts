@@ -267,3 +267,44 @@ export function adjust(image: ImageData, a: Adjustments): ImageData {
   }
   return out;
 }
+
+/**
+ * Re-encode an image so it fits in `maxBytes`, for sharing inside a QR code.
+ *
+ * AVIF gives by far the best quality at a few kilobytes. The search starts at
+ * up to 800 px and, at each size, binary-searches the highest quality that
+ * fits; the first size reaching a reasonable quality (35) wins, otherwise the
+ * image keeps shrinking. Returns null if even a thumbnail won't fit.
+ */
+export async function fitToBytes(
+  file: { name: string; type: string; bytes: Uint8Array },
+  maxBytes: number,
+  onProgress?: (fraction: number) => void,
+): Promise<{ bytes: Uint8Array; width: number; height: number; quality: number } | null> {
+  const source = await decode(file.bytes, file.type);
+  const longest = Math.max(source.width, source.height);
+  let side = Math.min(longest, 800);
+  let fallback: { bytes: Uint8Array; width: number; height: number; quality: number } | null = null;
+  for (let step = 0; side >= 24; step++, side = Math.round(side * 0.8)) {
+    onProgress?.(Math.min(0.95, step / 10));
+    const scale = side / longest;
+    const width = Math.max(1, Math.round(source.width * scale));
+    const height = Math.max(1, Math.round(source.height * scale));
+    const image = await resize(source, width, height);
+    let [lo, hi] = [5, 85];
+    let best: Uint8Array | null = null;
+    let bestQ = 0;
+    while (lo <= hi) {
+      const q = Math.floor((lo + hi) / 2);
+      const bytes = await encode(image, 'image/avif', { quality: q });
+      if (bytes.length <= maxBytes) {
+        best = bytes;
+        bestQ = q;
+        lo = q + 6;
+      } else hi = q - 6;
+    }
+    if (best && bestQ >= 35) return { bytes: best, width, height, quality: bestQ };
+    if (best && !fallback) fallback = { bytes: best, width, height, quality: bestQ };
+  }
+  return fallback;
+}

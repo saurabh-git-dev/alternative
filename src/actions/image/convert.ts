@@ -18,6 +18,7 @@ export const convertImage: ActionDefinition = {
   accepts: ['image/*'],
   mode: 'each',
   verb: 'Convert',
+  produces: (_, p) => p.format as string,
   engines: ['MozJPEG', 'libwebp', 'libavif', 'OxiPNG'],
   params: {
     format: {

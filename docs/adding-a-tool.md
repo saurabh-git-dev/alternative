@@ -71,6 +71,9 @@ remembered. A tool has at most one.
   metadata shows the current title). Runs in the preview worker.
 - `livePreview: true`: image tools get a live preview of the first image,
   re-rendered on a downscaled copy whenever a setting changes.
+- `produces(inputType, params)`: the MIME type `run` returns, when it differs
+  from the input (e.g. PDF → JPG). Pipelines use it to check that steps fit
+  together; see [Pipelines](pipelines.md).
 
 Any parameter can set `advanced: true` (goes in the drawer), `help` (hint
 text) and `visibleWhen: (values) => boolean`.

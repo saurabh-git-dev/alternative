@@ -7,11 +7,52 @@
   import { ACTIONS, CATEGORIES } from '../../actions';
   import { accepts, detectType } from '../../core/files';
   import Dropzone from '../components/Dropzone.svelte';
+  import { readFile } from '../../core/files';
+  import { handoff } from '../handoff.svelte';
+  import { PIPELINE_ROUTE, encodePipeline } from '../../core/pipeline';
+  import { loadPipelines } from '../settings';
+
+  const pipelines = loadPipelines();
+
+  /**
+   * Tools that are pages of their own rather than actions (their result is a
+   * view, not a file). They are listed in their category alongside actions.
+   */
+  const PAGES = [
+    {
+      href: '#/compare',
+      icon: '🔀',
+      title: 'Compare PDFs',
+      description: 'See what changed between two versions, word by word and on the page.',
+      category: 'pdf-edit',
+      accepts: 'application/pdf',
+    },
+  ];
 
   let { onOpen }: { onOpen: (id: string, files?: File[]) => void } = $props();
 
   let query = $state('');
   let dropped = $state<File[]>([]);
+
+  /** Share isn't an action (its output is a link, not a file), so it is listed here. */
+  const showShare = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    return (!q || 'share as link or qr code send to phone'.includes(q)) && dropped.length <= 1;
+  });
+  const showAutomate = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    return !dropped.length && (!q || 'pipeline automate chain batch recipe'.includes(q) || pipelines.some((p) => p.name.toLowerCase().includes(q)));
+  });
+
+  function matchesPage(p: (typeof PAGES)[number]): boolean {
+    const q = query.trim().toLowerCase();
+    return (!q || `${p.title} ${p.description}`.toLowerCase().includes(q)) && dropped.every((f) => detectType(f) === p.accepts);
+  }
+
+  async function openShare() {
+    handoff.file = dropped[0] ? await readFile(dropped[0]) : null;
+    location.hash = '#/share';
+  }
 
   const visible = $derived(
     ACTIONS.filter((a) => {
@@ -43,12 +84,53 @@
   {/if}
 </div>
 
+{#if showShare}
+  <section class="group">
+    <h2>Share</h2>
+    <div class="grid">
+      <button class="tool card" onclick={openShare}>
+        <span class="icon" aria-hidden="true">🔗</span>
+        <span class="title">Share as link or QR</span>
+        <span class="desc muted">Put a small file or text into a link and QR code, then open it on your phone.</span>
+      </button>
+    </div>
+  </section>
+{/if}
+
+{#if showAutomate}
+  <section class="group">
+    <h2>Automate</h2>
+    <div class="grid">
+      <a class="tool card" href={PIPELINE_ROUTE}>
+        <span class="icon" aria-hidden="true">⛓️</span>
+        <span class="title">Build a pipeline</span>
+        <span class="desc muted">Chain tools and run them in one go, e.g. photos → PDF → OCR → compress.</span>
+      </a>
+      {#each pipelines as p (p.name)}
+        <a class="tool card" href={`${PIPELINE_ROUTE}/${encodePipeline(p)}`}>
+          <span class="icon" aria-hidden="true">▶️</span>
+          <span class="title">{p.name}</span>
+          <span class="desc muted">{p.steps.length} steps · your pipeline</span>
+        </a>
+      {/each}
+    </div>
+  </section>
+{/if}
+
 {#each CATEGORIES as category (category.id)}
   {@const tools = visible.filter((a) => a.category === category.id)}
-  {#if tools.length}
+  {@const pages = PAGES.filter((p) => p.category === category.id && matchesPage(p))}
+  {#if tools.length || pages.length}
     <section class="group">
       <h2>{category.label}</h2>
       <div class="grid">
+        {#each pages as p (p.href)}
+          <a class="tool card" href={p.href}>
+            <span class="icon" aria-hidden="true">{p.icon}</span>
+            <span class="title">{p.title}</span>
+            <span class="desc muted">{p.description}</span>
+          </a>
+        {/each}
         {#each tools as tool (tool.id)}
           <button class="tool card" onclick={() => onOpen(tool.id, dropped)}>
             <span class="icon" aria-hidden="true">{tool.icon}</span>
@@ -120,6 +202,10 @@
     text-align: left;
     padding: 18px;
     transition: transform 0.12s, border-color 0.12s;
+  }
+  a.tool {
+    text-decoration: none;
+    color: inherit;
   }
   .tool:hover {
     border-color: var(--accent);

@@ -18,6 +18,13 @@ const VENDOR_FILES: Record<string, string> = {
   // English ships with the app so the most common case works fully offline;
   // other languages download from jsDelivr on first use (see src/engines/ocr.ts).
   'vendor/tesseract/lang/eng.traineddata.gz': nodeModules('@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz'),
+  // AI models for ONNX Runtime Web (src/engines/onnx.ts). RMBG-1.4 comes split
+  // into 9 MB parts on npm, which also keeps each file small for static hosts.
+  ...Object.fromEntries(
+    [1, 2, 3, 4, 5].map((i) => [`vendor/models/rmbg-1.4/briaai-${i}.onnx`, nodeModules(`@rmbg/model-briaai/briaai-${i}.onnx`)]),
+  ),
+  // Converted from Real-ESRGAN's weights by tools/convert-realesrgan.py.
+  'vendor/models/realesr-general-x4.onnx': fileURLToPath(new URL('./models/realesr-general-x4.onnx', import.meta.url)),
 };
 
 function vendorFiles(): Plugin {
@@ -28,7 +35,7 @@ function vendorFiles(): Plugin {
         const path = req.url?.split('?')[0].replace(/^\//, '') ?? '';
         const source = VENDOR_FILES[path];
         if (!source) return next();
-        res.setHeader('Content-Type', path.endsWith('.js') ? 'text/javascript' : 'application/octet-stream');
+        res.setHeader('Content-Type', /\.m?js$/.test(path) ? 'text/javascript' : path.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream');
         res.end(readFileSync(source));
       });
     },
@@ -68,6 +75,7 @@ export default defineConfig({
   optimizeDeps: {
     exclude: [
       'mupdf',
+      'onnxruntime-web',
       '@jsquash/jpeg',
       '@jsquash/webp',
       '@jsquash/avif',

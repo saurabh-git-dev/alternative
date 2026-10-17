@@ -6,6 +6,7 @@
   import type { FileData, OutputFile } from '../../core/types';
   import { download, formatBytes, toBlob, zipFiles } from '../../core/files';
   import CompareSlider from './CompareSlider.svelte';
+  import { handoff } from '../handoff.svelte';
 
   let {
     results,
@@ -46,6 +47,11 @@
     const change = r.bytes.length / r.inputSize - 1;
     if (Math.abs(change) < 0.005) return 'same size';
     return `${change < 0 ? '−' : '+'}${Math.abs(Math.round(change * 100))}%`;
+  }
+
+  function share(r: OutputFile) {
+    handoff.file = { name: r.name, type: r.type, bytes: r.bytes };
+    location.hash = '#/share';
   }
 
   function canCompare(r: OutputFile): boolean {
@@ -97,6 +103,7 @@
         <a class="btn" href={urls[i]} target="_blank" rel="noopener">Open</a>
       {/if}
       <button class="btn" onclick={() => download(toBlob(r), r.name)}>Download</button>
+      <button class="btn" title="Share as link or QR code" onclick={() => share(r)}>Share</button>
     </li>
   {/each}
 </ul>

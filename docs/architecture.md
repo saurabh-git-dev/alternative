@@ -23,9 +23,12 @@ Home ─► Tool page                worker.ts
 | `src/core/files.ts` | MIME detection, naming, ZIP, downloads |
 | `src/core/runner.ts` | main-thread job API: progress, cancel, previews |
 | `src/core/worker.ts` | worker entry; runs actions and renders thumbnails |
+| `src/core/pipeline.ts` | pipelines: chained steps, type planning, recipes |
+| `src/core/share.ts` | share links: files packed into a URL / QR code |
+| `src/core/text-diff.ts` | word diff used by Compare PDFs |
 | `src/engines/` | one thin wrapper per engine; the only place engine APIs are called |
 | `src/actions/` | one file per tool, plus `index.ts` (the registry) |
-| `src/ui/` | Svelte components; nothing tool-specific |
+| `src/ui/` | Svelte components; nothing tool-specific, except pages whose result is a view rather than a file (`Share`, `Received`, `Pipeline`, `Compare`), listed on the home page next to the actions |
 | `tests/` | Vitest unit tests |
 
 ## Key decisions

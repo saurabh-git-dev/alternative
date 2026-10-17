@@ -19,6 +19,7 @@ export const imagesToPdf: ActionDefinition = {
   accepts: ['image/*'],
   mode: 'all',
   verb: 'Create PDF',
+  produces: () => 'application/pdf',
   engines: ['pdf-lib', 'jSquash'],
   params: {
     pageSize: {

@@ -81,6 +81,21 @@ export interface PositionParam extends ParamBase<string> {
   kind: 'position';
 }
 
+/** A file the user picks for a setting, e.g. a digital ID. Never remembered or saved. */
+export interface FileValue {
+  name: string;
+  bytes: Uint8Array;
+}
+
+export interface FileParam extends ParamBase<FileValue | null> {
+  kind: 'file';
+  /** `accept` attribute for the picker, e.g. `.p12,.pfx`. */
+  accept: string;
+  placeholder?: string;
+  /** Block running until a file is chosen (while the parameter is visible). */
+  required?: boolean;
+}
+
 /**
  * Page order editor: renders thumbnails the user can reorder, rotate and delete.
  * Value is a list of `{ page, rotate }` (1-based pages); empty means "unchanged".
@@ -130,6 +145,31 @@ export interface SignatureParam extends ParamBase<SignatureValue> {
 }
 
 /** Values for the PDF's form fields, keyed by field name. Filled from the document. */
+/** One mark drawn by Annotate PDF. Geometry is in fractions of the displayed page. */
+export interface Annotation {
+  page: number;
+  kind: 'pen' | 'highlight' | 'text' | 'box' | 'ellipse' | 'arrow' | 'whiteout' | 'comment';
+  /** `#rrggbb`. */
+  color: string;
+  /** Line width as a fraction of the page width. */
+  width: number;
+  /** Bounding box (highlight, text, box, ellipse, whiteout) or anchor point (comment: x, y). */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Pen strokes, or the arrow's [start, end]. */
+  points?: [number, number][][];
+  /** Text box or comment text. */
+  text?: string;
+  /** Font size as a fraction of the page width. */
+  size?: number;
+}
+
+export interface AnnotationsParam extends ParamBase<Annotation[]> {
+  kind: 'annotations';
+}
+
 export interface FormFieldsParam extends ParamBase<Record<string, string | boolean>> {
   kind: 'formFields';
 }
@@ -145,7 +185,9 @@ export type ParamSpec =
   | CropParam
   | RegionsParam
   | SignatureParam
-  | FormFieldsParam;
+  | FormFieldsParam
+  | AnnotationsParam
+  | FileParam;
 
 export type ParamValue =
   | string
@@ -155,7 +197,10 @@ export type ParamValue =
   | Box
   | PageBox[]
   | SignatureValue
-  | Record<string, string | boolean>;
+  | Record<string, string | boolean>
+  | Annotation[]
+  | FileValue
+  | null;
 export type ParamValues = Record<string, ParamValue>;
 
 /** Named, ready-made parameter set, e.g. "Recommended" or "Extreme". */
@@ -215,6 +260,13 @@ export interface ActionDefinition {
    * e.g. a PDF's current metadata. Runs in the preview worker.
    */
   inspect?(file: FileData): Promise<ParamValues>;
+  /**
+   * MIME type of the files `run` returns for an input of `inputType`, so
+   * pipelines can check that steps fit together before running. Leave it out
+   * when outputs have the input's type (most PDF tools); image tools that
+   * re-encode default to `encodableImageType` (see core/pipeline.ts).
+   */
+  produces?(inputType: string, params: ParamValues): string;
   /**
    * Show a live preview of the first image while settings change. The action
    * runs on a downscaled copy in the preview worker, so `run` must work on

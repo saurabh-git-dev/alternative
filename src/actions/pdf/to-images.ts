@@ -17,6 +17,7 @@ export const pdfToImages: ActionDefinition = {
   accepts: ['application/pdf'],
   mode: 'each',
   verb: 'Convert to images',
+  produces: (_, p) => (p.format === 'png' ? 'image/png' : 'image/jpeg'),
   engines: ['mupdf'],
   defaultPreset: 'screen',
   presets: [

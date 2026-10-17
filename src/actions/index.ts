@@ -23,6 +23,9 @@ import { webViewPdf } from './pdf/web-view';
 import { metadataPdf } from './pdf/metadata';
 import { ocrPdf } from './pdf/ocr';
 import { signPdf } from './pdf/sign';
+import { annotatePdf } from './pdf/annotate';
+import { pdfToPdfa } from './pdf/pdfa';
+import { digitalSignPdf } from './pdf/digital-sign';
 import { redactPdf } from './pdf/redact';
 import { fillFormPdf } from './pdf/fill-form';
 import { watermarkImage } from './image/watermark';
@@ -30,6 +33,8 @@ import { editImage } from './image/edit';
 import { cropImage } from './image/crop';
 import { stripMetadata } from './image/metadata';
 import { ocrImage } from './image/ocr';
+import { removeBackground } from './image/remove-background';
+import { upscaleImage } from './image/upscale';
 
 /** Order here is the order on the home page (within each category). */
 export const ACTIONS: ActionDefinition[] = [
@@ -44,6 +49,9 @@ export const ACTIONS: ActionDefinition[] = [
   imagesToPdf,
   ocrPdf,
   signPdf,
+  annotatePdf,
+  pdfToPdfa,
+  digitalSignPdf,
   fillFormPdf,
   watermarkPdf,
   pageNumbersPdf,
@@ -54,6 +62,8 @@ export const ACTIONS: ActionDefinition[] = [
   compressImage,
   resizeImage,
   cropImage,
+  removeBackground,
+  upscaleImage,
   convertImage,
   editImage,
   rotateImage,

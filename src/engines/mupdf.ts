@@ -9,6 +9,7 @@
  * The module is imported lazily so only tools that need it pay the download.
  */
 import type * as MuPDF from 'mupdf';
+import type { Annotation } from '../core/types';
 
 let modulePromise: Promise<typeof MuPDF> | null = null;
 
@@ -211,6 +212,216 @@ export async function redact(bytes: Uint8Array, options: RedactOptions): Promise
     }
     const out = doc.saveToBuffer('garbage=compact,compress=yes').asUint8Array().slice();
     return { bytes: out, count };
+  } finally {
+    doc.destroy();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Comparing two PDFs
+// ---------------------------------------------------------------------------
+
+/** Plain text of every page, in reading order. */
+export async function pageTexts(bytes: Uint8Array): Promise<string[]> {
+  const mupdf = await loadMupdf();
+  const doc = mupdf.Document.openDocument(bytes, 'application/pdf');
+  try {
+    return Array.from({ length: doc.countPages() }, (_, i) => {
+      const page = doc.loadPage(i);
+      const text = page.toStructuredText('').asText();
+      page.destroy();
+      return text;
+    });
+  } finally {
+    doc.destroy();
+  }
+}
+
+export interface VisualDiff {
+  width: number;
+  height: number;
+  /** Share of pixels that differ, 0–1. */
+  changed: number;
+  /** Number of pixels that differ. */
+  changedPixels: number;
+  /** Both pages rendered at the same pixel size (PNG), when requested. */
+  before?: Uint8Array;
+  after?: Uint8Array;
+  /** The "after" page faded to grey, removed ink in red, added ink in green (PNG). */
+  diff?: Uint8Array;
+}
+
+/**
+ * Pixel comparison of page `pageA` of `a` with page `pageB` of `b`, both
+ * rendered `width` pixels wide (page B is stretched to page A's size if they
+ * differ). With `images: false` only the changed share is computed, which is
+ * cheap enough to scan every page at thumbnail size.
+ */
+export async function visualDiff(a: Uint8Array, b: Uint8Array, pageA: number, pageB: number, width: number, images = true): Promise<VisualDiff> {
+  const mupdf = await loadMupdf();
+  const docA = mupdf.Document.openDocument(a, 'application/pdf');
+  const docB = mupdf.Document.openDocument(b, 'application/pdf');
+  try {
+    const pa = docA.loadPage(pageA - 1);
+    const pb = docB.loadPage(pageB - 1);
+    const [ax0, ay0, ax1, ay1] = pa.getBounds();
+    const [bx0, by0, bx1, by1] = pb.getBounds();
+    const scale = width / (ax1 - ax0);
+    const height = Math.max(1, Math.round((ay1 - ay0) * scale));
+    const render = (page: typeof pa, sx: number, sy: number) => {
+      const pix = page.toPixmap([sx, 0, 0, sy, 0, 0], mupdf.ColorSpace.DeviceRGB, false, true);
+      return pix;
+    };
+    const pixA = render(pa, scale, scale);
+    const pixB = render(pb, width / (bx1 - bx0), height / (by1 - by0));
+    const w = Math.min(pixA.getWidth(), pixB.getWidth());
+    const h = Math.min(pixA.getHeight(), pixB.getHeight());
+    const sa = pixA.getPixels();
+    const sb = pixB.getPixels();
+    const strideA = pixA.getStride();
+    const strideB = pixB.getStride();
+
+    const out = images ? new Uint8ClampedArray(w * h * 3) : null;
+    let changed = 0;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * strideA + x * 3;
+        const j = y * strideB + x * 3;
+        const d = Math.max(Math.abs(sa[i] - sb[j]), Math.abs(sa[i + 1] - sb[j + 1]), Math.abs(sa[i + 2] - sb[j + 2]));
+        // Small differences are anti-aliasing noise, not changes.
+        const isChanged = d > 64;
+        if (isChanged) changed++;
+        if (!out) continue;
+        const o = (y * w + x) * 3;
+        const lumA = sa[i] * 0.3 + sa[i + 1] * 0.59 + sa[i + 2] * 0.11;
+        const lumB = sb[j] * 0.3 + sb[j + 1] * 0.59 + sb[j + 2] * 0.11;
+        if (isChanged) {
+          // Darker before = ink that disappeared (red); darker after = new ink (green).
+          const [r, g, bl] = lumA < lumB ? [220, 38, 38] : [22, 163, 74];
+          out[o] = r;
+          out[o + 1] = g;
+          out[o + 2] = bl;
+        } else {
+          const v = 255 - (255 - lumB) * 0.3;
+          out[o] = out[o + 1] = out[o + 2] = v;
+        }
+      }
+    }
+
+    const result: VisualDiff = { width: w, height: h, changed: changed / (w * h), changedPixels: changed };
+    if (out) {
+      const pix = new mupdf.Pixmap(mupdf.ColorSpace.DeviceRGB, [0, 0, w, h], false);
+      const target = pix.getPixels();
+      const stride = pix.getStride();
+      for (let y = 0; y < h; y++) target.set(out.subarray(y * w * 3, (y + 1) * w * 3), y * stride);
+      result.diff = pix.asPNG().slice();
+      result.before = pixA.asPNG().slice();
+      result.after = pixB.asPNG().slice();
+      pix.destroy();
+    }
+    pixA.destroy();
+    pixB.destroy();
+    pa.destroy();
+    pb.destroy();
+    return result;
+  } finally {
+    docA.destroy();
+    docB.destroy();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Annotations
+// ---------------------------------------------------------------------------
+
+/**
+ * Add annotations as real PDF annotations (so they stay editable in Acrobat,
+ * Preview and other viewers), or bake them into the page content when
+ * `flatten` is set. Geometry comes in fractions of the displayed page.
+ */
+export async function annotate(bytes: Uint8Array, annotations: Annotation[], options: { flatten: boolean; author: string }): Promise<Uint8Array> {
+  const mupdf = await loadMupdf();
+  const doc = mupdf.Document.openDocument(bytes, 'application/pdf') as InstanceType<typeof mupdf.PDFDocument>;
+  if (doc.needsPassword()) {
+    doc.destroy();
+    throw new Error('This PDF is password-protected. Unlock it first.');
+  }
+  try {
+    const rgb = (hex: string): [number, number, number] => {
+      const n = parseInt(hex.slice(1), 16);
+      return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+    };
+    for (const a of annotations) {
+      if (a.page < 1 || a.page > doc.countPages()) continue;
+      const page = doc.loadPage(a.page - 1) as InstanceType<typeof mupdf.PDFPage>;
+      const [bx0, by0, bx1, by1] = page.getBounds();
+      const pw = bx1 - bx0;
+      const ph = by1 - by0;
+      const pt = (x: number, y: number): [number, number] => [bx0 + x * pw, by0 + y * ph];
+      const rect = (): [number, number, number, number] => [...pt(a.x, a.y), ...pt(a.x + a.w, a.y + a.h)];
+      const color = rgb(a.color);
+      const width = a.width * pw;
+      let annot: InstanceType<typeof mupdf.PDFAnnotation>;
+      switch (a.kind) {
+        case 'pen':
+          annot = page.createAnnotation('Ink');
+          annot.setInkList((a.points ?? []).map((stroke) => stroke.map(([x, y]) => pt(x, y))));
+          annot.setColor(color);
+          annot.setBorderWidth(width);
+          break;
+        case 'highlight': {
+          annot = page.createAnnotation('Highlight');
+          const [x0, y0, x1, y1] = rect();
+          annot.setQuadPoints([[x0, y0, x1, y0, x0, y1, x1, y1]]);
+          annot.setColor(color);
+          break;
+        }
+        case 'box':
+        case 'ellipse':
+          annot = page.createAnnotation(a.kind === 'box' ? 'Square' : 'Circle');
+          annot.setRect(rect());
+          annot.setColor(color);
+          annot.setBorderWidth(width);
+          break;
+        case 'whiteout':
+          annot = page.createAnnotation('Square');
+          annot.setRect(rect());
+          annot.setColor([1, 1, 1]);
+          annot.setInteriorColor([1, 1, 1]);
+          annot.setBorderWidth(0);
+          break;
+        case 'arrow': {
+          const [[start, end]] = a.points ?? [[[a.x, a.y], [a.x + a.w, a.y + a.h]]];
+          annot = page.createAnnotation('Line');
+          annot.setLine(pt(...start), pt(...end));
+          annot.setLineEndingStyles('None', 'OpenArrow');
+          annot.setColor(color);
+          annot.setBorderWidth(width);
+          break;
+        }
+        case 'text':
+          annot = page.createAnnotation('FreeText');
+          annot.setRect(rect());
+          annot.setContents(a.text ?? '');
+          annot.setDefaultAppearance('Helv', (a.size ?? 0.02) * pw, color);
+          annot.setBorderWidth(0);
+          break;
+        case 'comment': {
+          annot = page.createAnnotation('Text');
+          const [x, y] = pt(a.x, a.y);
+          annot.setRect([x, y, x + 20, y + 20]);
+          annot.setContents(a.text ?? '');
+          annot.setIcon('Comment');
+          annot.setColor(color);
+          break;
+        }
+      }
+      if (options.author) annot.setAuthor(options.author);
+      annot.update();
+      page.destroy();
+    }
+    if (options.flatten) doc.bake(true, false);
+    return doc.saveToBuffer('garbage=compact,compress=yes').asUint8Array().slice();
   } finally {
     doc.destroy();
   }

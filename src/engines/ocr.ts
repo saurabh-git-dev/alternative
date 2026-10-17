@@ -8,6 +8,7 @@
  * used and then cached in the browser (IndexedDB), so later runs work offline.
  */
 import type { Worker as TesseractWorker } from 'tesseract.js';
+import { vendorUrl } from './vendor';
 
 export interface OcrWord {
   text: string;
@@ -26,15 +27,7 @@ export interface OcrResult {
   confidence: number;
 }
 
-const VENDOR = new URL(`${import.meta.env.BASE_URL}vendor/tesseract/`, appRoot()).href;
-
-/** The app's root URL, valid from both the page and module workers. */
-function appRoot(): string {
-  // Workers live under /assets/ in the build and /src/core/ in dev.
-  const here = self.location.href;
-  const cut = here.search(/\/(assets|src)\//);
-  return cut >= 0 ? here.slice(0, cut + 1) : new URL('./', here).href;
-}
+const VENDOR = vendorUrl('tesseract/');
 
 /** Languages served from /vendor/tesseract/lang (see vite.config.ts). */
 const BUNDLED_LANGUAGES = new Set(['eng']);
