@@ -56,12 +56,15 @@ export const grayscalePdf: ActionDefinition = {
 | `color` | colour picker | `#rrggbb` |
 | `position` | 3×3 grid | `top-left` … `bottom-right` |
 | `pageOrder` | thumbnail page editor | value is `{ page, rotate }[]` |
-| `crop` | crop box on the first image | value is a `Box` in fractions (0–1) |
+| `crop` | crop box on the first image, or over the player for videos | value is a `Box` in fractions (0–1) |
 | `regions` | boxes drawn on PDF pages | value is `PageBox[]` (fractions, top-left origin) |
 | `signature` | signature pad + placement on pages | value is `{ image, placements }` |
 | `formFields` | the PDF's own form fields | value is `{ [fieldName]: string \| boolean }` |
+| `timeRange` | video player with a trim timeline | value is `{ start, end }` in seconds (`end` 0 = to the end); `initialLength`, `maxLength` |
+| `videoTime` | video player to pick a moment | value is seconds |
+| `masks` | boxes drawn over the video, each with a time span | value is `MaskBox[]`; `preview` makes the boxes show the chosen effect |
 
-The last five are *workspace* kinds: they render in the main area instead of
+The kinds from `pageOrder` down are *workspace* kinds: they render in the main area instead of
 the settings panel, reset when a new file is loaded, and are never
 remembered. A tool has at most one.
 
@@ -84,3 +87,12 @@ text) and `visibleWhen: (values) => boolean`.
 - Labels in plain language ("Remove hidden metadata", not "Strip XMP").
 - Throw `Error`s with messages a user can act on ("Unlock it first").
 - Never return a worse file than the input when the tool's goal is "smaller".
+
+## Video tools
+
+Video tools are actions too, registered in `VIDEO_ACTIONS` (not `ACTIONS`)
+so they show in the Video section rather than on the PDF & image home page.
+Describe the work as a `VideoJob` and call `runJob` from
+`src/actions/video/shared.ts`; it picks WebCodecs or ffmpeg.wasm. See
+[video.md](video.md).
+

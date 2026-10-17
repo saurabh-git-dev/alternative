@@ -23,6 +23,8 @@
   import { isWorkspaceParam } from '../../core/params';
   import Results from '../components/Results.svelte';
   import { isConstrained } from '../../core/device';
+  import VideoWorkspace from '../components/VideoWorkspace.svelte';
+  import { videoPoster } from '../video-poster';
 
   let { action, initialFiles = [] }: { action: ActionDefinition; initialFiles?: File[] } = $props();
 
@@ -43,8 +45,18 @@
   /** The parameter edited directly on the document, if this tool has one. */
   const workspace = $derived(Object.entries(action.params).find(([, s]) => isWorkspaceParam(s)));
   const orderKey = $derived(workspace?.[1].kind === 'pageOrder' ? workspace[0] : undefined);
+  /** Video tools edit on a player: which editor it shows for the workspace parameter. */
+  const VIDEO_MODES = { timeRange: 'trim', videoTime: 'time', crop: 'crop', masks: 'masks' } as const;
+  const videoMode = $derived(
+    workspace && items[0]?.data.type.startsWith('video/') ? VIDEO_MODES[workspace[1].kind as keyof typeof VIDEO_MODES] : undefined,
+  );
+  const kind = $derived(
+    action.accepts.includes('application/pdf') ? 'PDF' : action.accepts.some((a) => a.startsWith('video/')) ? 'video' : 'image',
+  );
 
   const errors = $derived(validate(action, values));
+  /** A problem with the workspace value (e.g. nothing drawn yet), shown under the button. */
+  const workspaceError = $derived(workspace ? errors[workspace[0]] : undefined);
   const minFiles = $derived(action.minFiles ?? 1);
   const blocked = $derived(items.some((i) => i.encrypted) && action.id !== 'pdf.unlock');
   const canRun = $derived(
@@ -104,6 +116,14 @@
       }
     } else if (item.data.type.startsWith('image/')) {
       item.thumb = URL.createObjectURL(new Blob([item.data.bytes as BlobPart], { type: item.data.type }));
+    } else if (item.data.type.startsWith('video/')) {
+      item.src = URL.createObjectURL(new Blob([item.data.bytes as BlobPart], { type: item.data.type }));
+      const poster = await videoPoster(item.src);
+      const current = find();
+      if (current && poster) {
+        current.thumb = poster.thumb;
+        current.duration = poster.duration;
+      }
     }
   }
 
@@ -151,12 +171,26 @@
           accept={acceptAttr}
           multiple={!single}
           paste
-          label={`Drop ${action.accepts.includes('application/pdf') ? 'PDF' : 'image'} file${single ? '' : 's'} here`}
+          label={`Drop ${kind} file${single ? '' : 's'} here`}
           onFiles={addFiles}
         />
       {:else}
         {@const first = items[0]}
-        {#if workspace && !first.encrypted && !first.error}
+        {#if workspace && videoMode}
+          {@const [key, spec] = workspace}
+          {#if first.src}
+            <VideoWorkspace
+              src={first.src}
+              mode={videoMode}
+              value={values[key] as never}
+              onChange={(v) => (values[key] = v)}
+              initialLength={spec.kind === 'timeRange' ? spec.initialLength : undefined}
+              maxLength={spec.kind === 'timeRange' ? spec.maxLength : undefined}
+              effect={spec.kind === 'masks' ? spec.preview?.(values) : undefined}
+            />
+          {/if}
+          <FileList bind:items />
+        {:else if workspace && !first.encrypted && !first.error}
           {@const [key, spec] = workspace}
           {#if spec.kind === 'crop'}
             {#if first.thumb}
@@ -217,6 +251,8 @@
           </button>
           {#if items.length < minFiles}
             <p class="hint muted">Add at least {minFiles} files.</p>
+          {:else if workspaceError}
+            <p class="hint muted">{workspaceError}</p>
           {/if}
         {/if}
         <details class="how muted">

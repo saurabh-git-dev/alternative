@@ -8,7 +8,7 @@
   import { decodeFragment } from '../../core/share';
   import { download, formatBytes, toBlob } from '../../core/files';
   import FilePreview from '../components/FilePreview.svelte';
-  import { ACTIONS } from '../../actions';
+  import { ALL_ACTIONS as ACTIONS } from '../../actions';
   import { accepts } from '../../core/files';
   import { suggestItTools } from '../../it/suggest';
   import { itToolHref } from '../section';

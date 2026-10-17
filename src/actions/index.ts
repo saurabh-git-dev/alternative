@@ -35,6 +35,17 @@ import { stripMetadata } from './image/metadata';
 import { ocrImage } from './image/ocr';
 import { removeBackground } from './image/remove-background';
 import { upscaleImage } from './image/upscale';
+import { compressVideo } from './video/compress';
+import { trimVideo } from './video/trim';
+import { cropVideo } from './video/crop';
+import { blurVideo } from './video/blur';
+import { rotateVideo } from './video/rotate';
+import { resizeVideo } from './video/resize';
+import { convertVideo } from './video/convert';
+import { muteVideo } from './video/mute';
+import { videoToGif } from './video/gif';
+import { extractAudio } from './video/audio';
+import { videoFrame } from './video/frame';
 
 /** Order here is the order on the home page (within each category). */
 export const ACTIONS: ActionDefinition[] = [
@@ -81,7 +92,34 @@ export const CATEGORIES: { id: ActionCategory; label: string }[] = [
   { id: 'image', label: 'Images' },
 ];
 
-const byId = new Map(ACTIONS.map((a) => [a.id, a]));
+/**
+ * Video tools, shown in the Video section (`video/`). Kept apart from
+ * `ACTIONS` so the PDF & image home page and pipelines don't list them.
+ */
+export const VIDEO_ACTIONS: ActionDefinition[] = [
+  trimVideo,
+  cropVideo,
+  blurVideo,
+  rotateVideo,
+  compressVideo,
+  resizeVideo,
+  convertVideo,
+  muteVideo,
+  videoToGif,
+  extractAudio,
+  videoFrame,
+];
+
+export const VIDEO_CATEGORIES: { id: ActionCategory; label: string; icon: string }[] = [
+  { id: 'video-edit', label: 'Edit', icon: '✂️' },
+  { id: 'video-convert', label: 'Compress & convert', icon: '🗜️' },
+  { id: 'video-export', label: 'Export', icon: '📤' },
+];
+
+/** Every tool in every section. */
+export const ALL_ACTIONS: ActionDefinition[] = [...ACTIONS, ...VIDEO_ACTIONS];
+
+const byId = new Map(ALL_ACTIONS.map((a) => [a.id, a]));
 
 export function getAction(id: string): ActionDefinition | undefined {
   return byId.get(id);

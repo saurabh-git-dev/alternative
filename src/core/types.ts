@@ -7,6 +7,8 @@
  * adding a tool never needs bespoke form code.
  */
 
+import type { MaskBox, MaskStyle, TimeRange } from './video';
+
 /** A file moving through the system. Bytes are transferred to workers zero-copy. */
 export interface FileData {
   name: string;
@@ -170,6 +172,27 @@ export interface AnnotationsParam extends ParamBase<Annotation[]> {
   kind: 'annotations';
 }
 
+/** Part of a video, picked on a timeline under the player. `end` 0 means "to the end". */
+export interface TimeRangeParam extends ParamBase<TimeRange> {
+  kind: 'timeRange';
+  /** A new file starts with this many seconds selected (default: all of it). */
+  initialLength?: number;
+  /** Longest selection allowed, in seconds (e.g. for GIFs). */
+  maxLength?: number;
+}
+
+/** Areas drawn on the video to blur, pixelate or cover, each with its own time span. */
+export interface MasksParam extends ParamBase<MaskBox[]> {
+  kind: 'masks';
+  /** How the boxes look in the editor for the current settings, so the preview matches the result. */
+  preview?: (values: ParamValues) => { style: MaskStyle; strength: number; color: string };
+}
+
+/** A moment in a video, picked with the player (seconds). */
+export interface VideoTimeParam extends ParamBase<number> {
+  kind: 'videoTime';
+}
+
 export interface FormFieldsParam extends ParamBase<Record<string, string | boolean>> {
   kind: 'formFields';
 }
@@ -187,7 +210,10 @@ export type ParamSpec =
   | SignatureParam
   | FormFieldsParam
   | AnnotationsParam
-  | FileParam;
+  | FileParam
+  | TimeRangeParam
+  | MasksParam
+  | VideoTimeParam;
 
 export type ParamValue =
   | string
@@ -200,6 +226,8 @@ export type ParamValue =
   | Record<string, string | boolean>
   | Annotation[]
   | FileValue
+  | TimeRange
+  | MaskBox[]
   | null;
 export type ParamValues = Record<string, ParamValue>;
 
@@ -221,7 +249,10 @@ export type ActionCategory =
   | 'pdf-convert'
   | 'pdf-edit'
   | 'pdf-security'
-  | 'image';
+  | 'image'
+  | 'video-edit'
+  | 'video-convert'
+  | 'video-export';
 
 /** Passed to `run` so actions can report progress. */
 export interface RunContext {

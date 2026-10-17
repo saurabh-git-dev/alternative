@@ -71,10 +71,12 @@ export default defineConfig({
   worker: { format: 'es' },
   build: {
     target: 'es2022',
-    // Two pages, one app: PDF & image tools at the root, IT tools at it/ (see src/ui/section.ts).
+    // Four pages, one app: PDF & image tools at the root, then video/, record/ and it/ (see src/ui/section.ts).
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        video: fileURLToPath(new URL('./video/index.html', import.meta.url)),
+        record: fileURLToPath(new URL('./record/index.html', import.meta.url)),
         it: fileURLToPath(new URL('./it/index.html', import.meta.url)),
       },
     },
@@ -85,6 +87,7 @@ export default defineConfig({
     exclude: [
       'mupdf',
       'onnxruntime-web',
+      '@ffmpeg/core',
       '@jsquash/jpeg',
       '@jsquash/webp',
       '@jsquash/avif',

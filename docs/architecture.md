@@ -30,6 +30,9 @@ Home ─► Tool page                worker.ts
 | `src/actions/` | one file per tool, plus `index.ts` (the registry) |
 | `src/ui/` | Svelte components; nothing tool-specific, except pages whose result is a view rather than a file (`Share`, `Received`, `Pipeline`, `Compare`), listed on the home page next to the actions |
 | `src/it/`, `src/ui/it/` | IT tools section at `it/` (see [it-tools.md](it-tools.md)) |
+| `src/core/video.ts`, `src/actions/video/`, `src/ui/video/` | Video section at `video/` (see [video.md](video.md)) |
+| `src/core/recorder.ts`, `src/core/recordings.ts`, `src/ui/record/` | Screen recorder at `record/` (see [screen-recorder.md](screen-recorder.md)) |
+| `src/ui/section.ts` | which section a page is, and links between sections |
 | `tests/` | Vitest unit tests |
 
 ## Key decisions

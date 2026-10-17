@@ -31,7 +31,9 @@
   );
   const totalOut = $derived(results.reduce((s, r) => s + r.bytes.length, 0));
   const oneToOne = $derived(results.every((r) => r.inputIndex !== undefined) && new Set(results.map((r) => r.inputIndex)).size === results.length);
-  const saved = $derived(oneToOne && totalIn > 0 ? 1 - totalOut / totalIn : null);
+  /** "x% smaller" only makes sense when the output is the same kind of file (a frame from a video isn't "smaller"). */
+  const sameKind = $derived(results.every((r) => r.inputIndex !== undefined && r.type.split('/')[0] === inputs[r.inputIndex]?.type.split('/')[0]));
+  const saved = $derived(oneToOne && sameKind && totalIn > 0 ? 1 - totalOut / totalIn : null);
 
   async function downloadAll() {
     zipping = true;
@@ -85,12 +87,25 @@
   </div>
 </div>
 
+{#if results.length === 1 && /^(video|audio)\//.test(results[0].type)}
+  <div class="player card">
+    {#if results[0].type.startsWith('video/')}
+      <!-- svelte-ignore a11y_media_has_caption -->
+      <video src={urls[0]} controls playsinline preload="metadata"></video>
+    {:else}
+      <audio src={urls[0]} controls preload="metadata"></audio>
+    {/if}
+  </div>
+{/if}
+
 <ul class="list">
   {#each results as r, i (i)}
     <li class="card">
       <div class="thumb">
         {#if r.type.startsWith('image/')}
           <img src={urls[i]} alt="" loading="lazy" />
+        {:else if r.type.startsWith('video/')}
+          <video src={urls[i]} muted playsinline preload="metadata"></video>
         {:else}
           <span>{r.name.split('.').pop()?.toUpperCase()}</span>
         {/if}
@@ -196,6 +211,26 @@
     font-size: 11px;
     font-weight: 700;
     color: var(--text-3);
+  }
+  .player {
+    display: grid;
+    place-items: center;
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+  .player video {
+    max-width: 100%;
+    max-height: 55vh;
+    border-radius: var(--radius-sm);
+    background: #000;
+  }
+  .player audio {
+    width: 100%;
+  }
+  .thumb video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .thumb img {
     width: 100%;

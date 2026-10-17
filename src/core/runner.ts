@@ -152,6 +152,16 @@ export function fitImage(file: FileData, maxBytes: number, onProgress: (fraction
   return { result, cancel: () => worker.terminate() };
 }
 
+/** Rewrite a recording in a worker of its own (see WorkerApi.remuxVideo). The input bytes are handed over, not copied. */
+export async function remuxVideo(file: FileData): Promise<FileData> {
+  const { worker, api } = spawn();
+  try {
+    return await api.remuxVideo(Comlink.transfer(file, [file.bytes.buffer as ArrayBuffer]));
+  } finally {
+    worker.terminate();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Compare PDFs: a worker of its own, kept while the compare page is open
 // ---------------------------------------------------------------------------

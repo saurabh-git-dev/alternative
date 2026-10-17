@@ -16,6 +16,9 @@ export const WORKSPACE_KINDS: ReadonlySet<ParamSpec['kind']> = new Set([
   'signature',
   'formFields',
   'annotations',
+  'timeRange',
+  'masks',
+  'videoTime',
 ]);
 
 export function isWorkspaceParam(spec: ParamSpec): boolean {
@@ -88,6 +91,8 @@ export function validate(action: ActionDefinition, values: ParamValues): Record<
       }
     } else if (spec.kind === 'file' && spec.required && !value) {
       errors[key] = 'Choose a file.';
+    } else if (spec.kind === 'masks' && !(value as unknown[]).length) {
+      errors[key] = 'Draw a box over the area to hide.';
     } else if (spec.kind === 'text' && spec.validate) {
       const message = spec.validate(value as string, values);
       if (message) errors[key] = message;
