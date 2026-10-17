@@ -7,6 +7,7 @@
   import { download, formatBytes, toBlob, zipFiles } from '../../core/files';
   import CompareSlider from './CompareSlider.svelte';
   import { handoff } from '../handoff.svelte';
+  import { QR_ROUTE, appUrl, pack, qrCapacity } from '../../core/share';
 
   let {
     results,
@@ -49,9 +50,21 @@
     return `${change < 0 ? '−' : '+'}${Math.abs(Math.round(change * 100))}%`;
   }
 
-  function share(r: OutputFile) {
+  /** Biggest file that could still pack into one QR code; above it, skip the (costly) packing test. */
+  const QR_PRECHECK_BYTES = 64 * 1024;
+  const qrRoom = qrCapacity(`${appUrl(location)}#${QR_ROUTE}`, 'L');
+
+  /** Small files share as a QR code (Share page); bigger ones over a direct, encrypted connection. */
+  const fitsQr = $derived(results.map((r) => r.bytes.length <= QR_PRECHECK_BYTES && pack(r).length <= qrRoom));
+
+  function share(r: OutputFile, i: number) {
     handoff.file = { name: r.name, type: r.type, bytes: r.bytes };
-    location.hash = '#/share';
+    location.hash = fitsQr[i] ? '#/share' : '#/direct';
+  }
+
+  function sendAll() {
+    handoff.files = results.map((r) => ({ name: r.name, type: r.type, bytes: r.bytes }));
+    location.hash = '#/direct';
   }
 
   function canCompare(r: OutputFile): boolean {
@@ -74,6 +87,7 @@
       <button class="btn btn-primary btn-lg" onclick={() => download(toBlob(results[0]), results[0].name)}>⬇ Download</button>
     {:else}
       <button class="btn btn-primary btn-lg" disabled={zipping} onclick={downloadAll}>{zipping ? 'Zipping…' : '⬇ Download all (ZIP)'}</button>
+      <button class="btn btn-lg" title="Send every file to your phone over a direct, encrypted connection" onclick={sendAll}>📡 Send all to phone</button>
     {/if}
   </div>
 </div>
@@ -103,7 +117,11 @@
         <a class="btn" href={urls[i]} target="_blank" rel="noopener">Open</a>
       {/if}
       <button class="btn" onclick={() => download(toBlob(r), r.name)}>Download</button>
-      <button class="btn" title="Share as link or QR code" onclick={() => share(r)}>Share</button>
+      {#if fitsQr[i]}
+        <button class="btn" title="Small enough for a QR code: scan it with your phone to get the file" onclick={() => share(r, i)}>📱 QR code</button>
+      {:else}
+        <button class="btn" title="Too big for a QR code: send it to your phone over a direct, encrypted connection" onclick={() => share(r, i)}>📡 Send to phone</button>
+      {/if}
     </li>
   {/each}
 </ul>
