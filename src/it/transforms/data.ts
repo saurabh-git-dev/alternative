@@ -3,7 +3,7 @@ import type { OutputRow, TransformSpec } from '../types';
 import { csvToJson, decodeJwt, formatJson, jsonToCsv, jwtDateNotes, parseJson } from '../lib/data';
 
 export const jsonFormat: TransformSpec = {
-  input: { sample: '{"name":"Formatter","tools":["pdf","image","it"],"private":true,"version":{"major":1,"minor":0}}', label: 'JSON' },
+  input: { sample: '{"name":"Tools","tools":["pdf","image","it"],"private":true,"version":{"major":1,"minor":0}}', label: 'JSON' },
   options: {
     indent: {
       kind: 'choice',

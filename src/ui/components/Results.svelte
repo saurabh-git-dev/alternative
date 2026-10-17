@@ -36,7 +36,7 @@
   async function downloadAll() {
     zipping = true;
     try {
-      download(await zipFiles(results), 'formatter-results.zip');
+      download(await zipFiles(results), 'tools-results.zip');
     } finally {
       zipping = false;
     }

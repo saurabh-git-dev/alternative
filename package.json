@@ -1,5 +1,5 @@
 {
-  "name": "formatter",
+  "name": "tools",
   "version": "0.1.0",
   "private": true,
   "description": "In-browser PDF & image toolkit. Every action runs locally via WebAssembly.",
