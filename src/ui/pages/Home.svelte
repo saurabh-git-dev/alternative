@@ -85,6 +85,30 @@
       },
     },
     {
+      key: 'direct',
+      icon: '📡',
+      title: 'Send to your phone',
+      description: 'Any size, straight to another device by QR code, end-to-end encrypted.',
+      keywords: 'share transfer send big large file phone computer airdrop',
+      group: 'more',
+      takes: (files) => files.length <= 1,
+      open: async () => {
+        handoff.file = dropped[0] ? await readFile(dropped[0]) : null;
+        location.hash = '#/direct';
+      },
+    },
+    {
+      key: 'direct-receive',
+      icon: '📥',
+      title: 'Get files from your phone',
+      description: 'Scan a QR code with your phone and send photos or files here, any size.',
+      keywords: 'receive transfer import photos phone computer airdrop',
+      group: 'more',
+      href: '#/direct/receive',
+      takes: (files) => files.length === 0,
+      open: () => (location.hash = '#/direct/receive'),
+    },
+    {
       key: 'pipeline',
       icon: '⛓️',
       title: 'Build a pipeline',

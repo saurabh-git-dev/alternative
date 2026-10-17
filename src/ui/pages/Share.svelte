@@ -18,7 +18,7 @@
   } from '../../core/share';
   import { detectTextType } from '../../core/text-formats';
   import { fitImage } from '../../core/runner';
-  import { takeHandoff } from '../handoff.svelte';
+  import { handoff, takeHandoff } from '../handoff.svelte';
   import Dropzone from '../components/Dropzone.svelte';
   import QrCode from '../components/QrCode.svelte';
 
@@ -107,6 +107,12 @@
     setTimeout(() => (copied = false), 1500);
   }
 
+  /** Hand the file to the direct transfer page, which has no size limit. */
+  function sendDirect() {
+    handoff.file = current ? $state.snapshot(current) as FileData : null;
+    location.hash = '#/direct';
+  }
+
   function shareLink() {
     navigator.share({ title: current?.name, url: link }).catch(() => {});
   }
@@ -176,7 +182,8 @@
     {#if !current}
       <p class="muted empty">Add a file or some text to get a link and QR code.</p>
     {:else if tooBig}
-      <p class="error">This file is {formatBytes(current.bytes.length)}. Links can carry up to about {formatBytes(MAX_FILE_BYTES)}; for bigger files, compress it first.</p>
+      <p class="muted">This file is {formatBytes(current.bytes.length)}, more than a link can carry (about {formatBytes(MAX_FILE_BYTES)}). Send it straight to your other device instead: any size, end-to-end encrypted.</p>
+      <button class="btn btn-primary" onclick={sendDirect}>📡 Send directly</button>
     {:else if packed}
       <p class="stats small muted">
         Packed size <strong>{formatBytes(packed.length)}</strong>{#if packed.length < current.bytes.length * 0.95}, compressed from {formatBytes(current.bytes.length)}{/if}.
@@ -188,6 +195,7 @@
         <div class="nofit">
           <strong>Too big for a QR code.</strong>
           <p class="muted small">One QR code holds up to {formatBytes(capacity)}; this needs {formatBytes(packed.length)}. The link below still works: copy it or send it to your phone.</p>
+          <p class="muted small">Or <button class="linkish" onclick={sendDirect}>send it directly</button>: scan a small QR code and the file goes straight to your phone, end-to-end encrypted.</p>
           {#if isImage}
             {#if fitting}
               <div class="progress"><div style="width: {Math.round(fitting.fraction * 100)}%"></div></div>
@@ -218,6 +226,15 @@
 </div>
 
 <style>
+  .linkish {
+    border: 0;
+    padding: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
   .back {
     display: inline-block;
     margin: 4px 0 12px;

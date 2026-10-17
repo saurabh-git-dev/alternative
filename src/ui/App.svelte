@@ -1,7 +1,8 @@
 <!--
   App shell: header and a tiny hash router.
   Routes: `#/` (home), `#/tool/<action id>`, `#/share`, share links
-  `#/s/<data>` / `#/q/<data>` (see core/share.ts), `#/pipeline[/<data>]`
+  `#/s/<data>` / `#/q/<data>` (see core/share.ts), direct transfers
+  `#/direct`, `#/direct/receive` and `#/d/<invite>` (see core/direct.ts), `#/pipeline[/<data>]`
   (see core/pipeline.ts) and `#/compare`. Hash routing works on any
   static host with no server configuration.
 -->
@@ -12,8 +13,10 @@
   import Received from './pages/Received.svelte';
   import PipelinePage from './pages/Pipeline.svelte';
   import Compare from './pages/Compare.svelte';
+  import Direct from './pages/Direct.svelte';
   import { PIPELINE_ROUTE } from '../core/pipeline';
   import { LINK_ROUTE, QR_ROUTE } from '../core/share';
+  import { DIRECT_ROUTE } from '../core/direct';
   import { getAction } from '../actions';
   import { loadTheme, saveTheme, type Theme } from './settings';
 
@@ -42,6 +45,8 @@
           ? 'compare'
           : hash === '#/share'
           ? 'share'
+          : hash === '#/direct' || hash === '#/direct/receive' || hash.startsWith(`#${DIRECT_ROUTE}`)
+          ? 'direct'
           : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : 'home',
   );
 
@@ -54,6 +59,8 @@
         ? 'Compare PDFs · Formatter'
         : page === 'share'
         ? 'Share as link or QR · Formatter'
+        : page === 'direct'
+        ? 'Send between devices · Formatter'
         : page === 'received'
           ? 'Shared file · Formatter'
           : 'Formatter · PDF & image tools';
@@ -96,6 +103,10 @@
     <Compare />
   {:else if page === 'share'}
     <Share />
+  {:else if page === 'direct'}
+    {#key hash}
+      <Direct {hash} />
+    {/key}
   {:else if page === 'received'}
     <Received {hash} onOpen={openTool} />
   {:else}

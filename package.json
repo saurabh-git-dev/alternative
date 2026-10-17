@@ -32,6 +32,7 @@
     "node-forge": "^1.4.0",
     "onnxruntime-web": "^1.22.0",
     "pdf-lib": "^1.17.1",
+    "peerjs": "^1.5.5",
     "qrcode": "^1.5.4",
     "tesseract.js": "^7.0.0",
     "tesseract.js-core": "^7.0.0"
@@ -40,6 +41,7 @@
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^26.6.5",
+    "peer": "^1.0.2",
     "svelte": "^5.57.2",
     "svelte-check": "^4.7.7",
     "typescript": "~5.9",
