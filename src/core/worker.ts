@@ -73,6 +73,13 @@ const api = {
     return Comlink.transfer(r, buffers);
   },
 
+  /** Rewrite a browser recording so players know its length and can seek (see engines/video.ts remux). */
+  async remuxVideo(file: FileData): Promise<FileData> {
+    const { remux } = await import('../engines/video');
+    const out = await remux(file);
+    return Comlink.transfer(out, [out.bytes.buffer as ArrayBuffer]);
+  },
+
   /** Shrink an image to fit a byte budget (see engines/image.ts fitToBytes). */
   async fitImage(file: FileData, maxBytes: number, onProgress: ProgressCallback) {
     const { fitToBytes } = await import('../engines/image');

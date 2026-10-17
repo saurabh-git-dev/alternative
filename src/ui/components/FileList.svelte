@@ -10,6 +10,10 @@
     id: string;
     data: FileData;
     thumb?: string;
+    /** Object URL of a video, for the player in video tools. */
+    src?: string;
+    /** Length of a video in seconds. */
+    duration?: number;
     pages?: number;
     encrypted?: boolean;
     error?: string;
@@ -18,6 +22,7 @@
 
 <script lang="ts">
   import { formatBytes } from '../../core/files';
+  import { formatTime } from '../../core/video';
 
   let { items = $bindable(), reorderable = false }: { items: Item[]; reorderable?: boolean } = $props();
 
@@ -57,7 +62,7 @@
         {#if item.thumb}
           <img src={item.thumb} alt="" />
         {:else}
-          <span>{item.data.type === 'application/pdf' ? 'PDF' : '…'}</span>
+          <span>{item.data.type === 'application/pdf' ? 'PDF' : item.data.type.startsWith('video/') ? 'VIDEO' : '…'}</span>
         {/if}
       </div>
       <div class="meta">
@@ -65,6 +70,7 @@
         <div class="muted small">
           {formatBytes(item.data.bytes.length)}
           {#if item.pages}· {item.pages} page{item.pages > 1 ? 's' : ''}{/if}
+          {#if item.duration}· {formatTime(item.duration)}{/if}
           {#if item.encrypted}· <span class="lock">🔒 password-protected</span>{/if}
         </div>
         {#if item.error}<div class="err small">{item.error}</div>{/if}

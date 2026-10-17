@@ -18,6 +18,7 @@
   import { handoff } from '../handoff.svelte';
   import { PIPELINE_ROUTE, encodePipeline } from '../../core/pipeline';
   import { loadPipelines } from '../settings';
+  import { RECORD_HOME, VIDEO_HOME } from '../section';
 
   let { onOpen }: { onOpen: (id: string, files?: File[]) => void } = $props();
 
@@ -118,6 +119,28 @@
       href: '#/scan',
       takes: (files) => files.length === 0,
       open: () => (location.hash = '#/scan'),
+    },
+    {
+      key: 'video',
+      icon: '🎬',
+      title: 'Video tools',
+      description: 'Trim, crop, blur areas, compress, convert, GIFs and more.',
+      keywords: 'video mp4 movie clip compress trim cut crop blur gif audio mp3',
+      group: 'more',
+      href: VIDEO_HOME,
+      takes: (files) => files.length === 0 || files.every((f) => detectType(f).startsWith('video/')),
+      open: () => (location.href = VIDEO_HOME),
+    },
+    {
+      key: 'record',
+      icon: '⏺️',
+      title: 'Screen recorder',
+      description: 'Record your screen, camera and mic. Saved in this browser.',
+      keywords: 'loom screencast capture webcam',
+      group: 'more',
+      href: RECORD_HOME,
+      takes: (files) => files.length === 0,
+      open: () => (location.href = RECORD_HOME),
     },
     {
       key: 'it',

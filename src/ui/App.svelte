@@ -7,11 +7,14 @@
   (see core/pipeline.ts) and `#/compare`. Hash routing works on any
   static host with no server configuration.
 
-  The same app also serves the IT tools section at `it/` (see ui/section.ts):
-  there `#/` is the IT home and `#/<tool id>[/<state>]` opens an IT tool
-  (see it/registry.ts). Every other route works in both sections.
+  The same app also serves the Video (`video/`), Screen recorder (`record/`)
+  and IT tools (`it/`) sections (see ui/section.ts). `#/` is each section's
+  home; in `it/`, `#/<tool id>[/<state>]` opens an IT tool (see
+  it/registry.ts), and `#/tool/<video tool>/recording/<id>` opens a video
+  tool with a saved recording loaded. Every other route works everywhere.
 -->
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Home from './pages/Home.svelte';
   import Tool from './pages/Tool.svelte';
   import Share from './pages/Share.svelte';
@@ -22,8 +25,10 @@
   import Scan from './pages/Scan.svelte';
   import ItHome from './it/ItHome.svelte';
   import ItTool from './it/ItTool.svelte';
+  import VideoHome from './video/VideoHome.svelte';
+  import RecordHome from './record/RecordHome.svelte';
   import { getItTool } from '../it/registry';
-  import { FILES_HOME, IT_HOME, section } from './section';
+  import { FILES_HOME, IT_HOME, RECORD_HOME, VIDEO_HOME, section, type Section } from './section';
   import { PIPELINE_ROUTE } from '../core/pipeline';
   import { LINK_ROUTE, QR_ROUTE } from '../core/share';
   import { DIRECT_ROUTE } from '../core/direct';
@@ -44,7 +49,24 @@
     return () => removeEventListener('hashchange', onHash);
   });
 
-  const action = $derived(hash.startsWith('#/tool/') ? getAction(decodeURIComponent(hash.slice(7))) : undefined);
+  /** `#/tool/<id>` or `#/tool/<id>/recording/<recording id>`. */
+  const toolRoute = $derived(/^#\/tool\/([^/]+)(?:\/recording\/([\w-]+))?$/.exec(hash));
+  const action = $derived(toolRoute ? getAction(decodeURIComponent(toolRoute[1])) : undefined);
+  const recordingId = $derived(toolRoute?.[2]);
+  /** A recording opened in a tool: loaded from the library, then handed over like dropped files. */
+  let opened = $state<{ id: string; ready: boolean; error?: string } | null>(null);
+  $effect(() => {
+    const id = recordingId;
+    if (!id || untrack(() => opened?.id) === id) return;
+    opened = { id, ready: false };
+    import('./record/open')
+      .then(({ recordingFile }) => recordingFile(id))
+      .then((file) => {
+        pending = [file];
+        opened = { id, ready: true };
+      })
+      .catch((e: unknown) => (opened = { id, ready: false, error: e instanceof Error ? e.message : String(e) }));
+  });
   /** `#/<id>` or `#/<id>/<state>` for an IT tool. */
   const itRoute = $derived(/^#\/([a-z0-9-]+)(?:\/(.+))?$/.exec(hash));
   const itTool = $derived(itRoute ? getItTool(itRoute[1]) : undefined);
@@ -64,16 +86,23 @@
           ? 'scan'
           : hash === '#/direct' || hash === '#/direct/receive' || hash.startsWith(`#${DIRECT_ROUTE}`)
           ? 'direct'
-          : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : section === 'it' ? 'it-home' : 'home',
+          : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : `${section}-home`,
   );
+
+  const HOME_TITLES: Record<Section, string> = {
+    files: 'Tools · PDF, image & IT tools in your browser',
+    video: 'Video tools',
+    record: 'Screen recorder',
+    it: 'IT tools',
+  };
 
   $effect(() => {
     document.title = action
       ? `${action.title} · Tools`
       : itTool
       ? `${itTool.title} · IT tools`
-      : page === 'it-home'
-      ? 'IT tools'
+      : page.endsWith('-home')
+      ? HOME_TITLES[section]
       : page === 'pipeline'
         ? 'Pipeline · Tools'
         : page === 'compare'
@@ -84,10 +113,15 @@
         ? 'Scan to connect · Tools'
         : page === 'direct'
         ? 'Send between devices · Tools'
-        : page === 'received'
-          ? 'Shared file · Tools'
-          : 'Tools · PDF, image & IT tools in your browser';
+        : 'Shared file · Tools';
   });
+
+  const SECTIONS: { id: Section; href: string; icon: string; label: string; short: string }[] = [
+    { id: 'files', href: FILES_HOME, icon: '📄', label: 'PDF & Image', short: 'Files' },
+    { id: 'video', href: VIDEO_HOME, icon: '🎬', label: 'Video', short: 'Video' },
+    { id: 'record', href: RECORD_HOME, icon: '⏺️', label: 'Screen recorder', short: 'Record' },
+    { id: 'it', href: IT_HOME, icon: '🛠️', label: 'IT tools', short: 'IT' },
+  ];
 
   function toggleTheme() {
     theme = theme === 'dark' ? 'light' : 'dark';
@@ -106,8 +140,11 @@
     <span class="name">Tools</span>
   </a>
   <nav class="sections" aria-label="Sections">
-    <a href={FILES_HOME} class:active={section === 'files'} aria-current={section === 'files' ? 'page' : undefined}><span aria-hidden="true">📄</span> PDF & Image</a>
-    <a href={IT_HOME} class:active={section === 'it'} aria-current={section === 'it' ? 'page' : undefined}><span aria-hidden="true">🛠️</span> IT tools</a>
+    {#each SECTIONS as s (s.id)}
+      <a href={s.href} class:active={section === s.id} aria-current={section === s.id ? 'page' : undefined} title={s.label}>
+        <span aria-hidden="true">{s.icon}</span> <span class="long">{s.label}</span><span class="short">{s.short}</span>
+      </a>
+    {/each}
   </nav>
   <span class="badge" title="Every tool runs inside your browser using WebAssembly. Nothing is uploaded.">
     🔒 Files never leave your device
@@ -119,8 +156,10 @@
 </header>
 
 <main>
-  {#if action}
-    {#key action.id}
+  {#if action && recordingId && !(opened?.id === recordingId && opened.ready)}
+    <p class="muted loading">{opened?.error ? `Couldn't open the recording: ${opened.error}` : 'Opening recording…'}</p>
+  {:else if action}
+    {#key `${action.id}/${recordingId ?? ''}`}
       <Tool {action} initialFiles={pending} />
     {/key}
   {:else if itTool}
@@ -129,6 +168,10 @@
     {/key}
   {:else if page === 'it-home'}
     <ItHome />
+  {:else if page === 'video-home'}
+    <VideoHome onOpen={openTool} />
+  {:else if page === 'record-home'}
+    <RecordHome />
   {:else if page === 'pipeline'}
     {#key hash}
       <PipelinePage encoded={hash.slice(PIPELINE_ROUTE.length + 1)} />
@@ -153,6 +196,10 @@
 <footer class="muted">
   {#if section === 'it'}
     Open source, AGPL-3.0. Every tool runs in your browser; nothing you type is sent anywhere.
+  {:else if section === 'video'}
+    Open source, AGPL-3.0. Powered by WebCodecs (via Mediabunny), ffmpeg.wasm and gifenc.
+  {:else if section === 'record'}
+    Open source, AGPL-3.0. Recorded with your browser's MediaRecorder and kept in its own storage.
   {:else}
     Open source, AGPL-3.0. Powered by qpdf, MuPDF, Ghostscript, pdf-lib, the Squoosh codecs and ONNX Runtime.
   {/if}
@@ -209,6 +256,9 @@
   .sections a:hover {
     color: var(--text);
   }
+  .sections .short {
+    display: none;
+  }
   .sections a.active {
     background: var(--surface);
     color: var(--text);
@@ -237,6 +287,10 @@
   .scan:hover {
     border-color: var(--accent);
   }
+  .loading {
+    text-align: center;
+    margin-top: 48px;
+  }
   main {
     max-width: 1120px;
     margin: 0 auto;
@@ -246,6 +300,26 @@
     text-align: center;
     font-size: 13px;
     padding: 24px 16px 40px;
+  }
+  @media (max-width: 980px) {
+    .badge {
+      display: none;
+    }
+    .scan {
+      margin-left: auto;
+    }
+    .sections .long {
+      display: none;
+    }
+    .sections .short {
+      display: inline;
+    }
+  }
+  /* Narrow phones: icons only, except the section you're in. */
+  @media (max-width: 420px) {
+    .sections a:not(.active) .short {
+      display: none;
+    }
   }
   @media (max-width: 560px) {
     main {
@@ -261,9 +335,19 @@
     .scan span {
       display: none;
     }
+    .sections {
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
     .sections a {
-      padding: 4px 9px;
+      padding: 4px 8px;
       font-size: 13px;
+    }
+    .sections .long {
+      display: none;
+    }
+    .sections .short {
+      display: inline;
     }
     .scan {
       margin-left: auto;

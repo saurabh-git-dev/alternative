@@ -117,3 +117,24 @@ export function saveItOptions(id: string, values: Record<string, unknown>): void
     /* storage unavailable */
   }
 }
+
+// ---------------------------------------------------------------------------
+// Screen recorder choices (source, mic, quality …)
+// ---------------------------------------------------------------------------
+
+export function loadRecorderOptions<T extends object>(defaults: T): T {
+  try {
+    const raw = localStorage.getItem(`${PREFIX}recorder`);
+    return raw ? { ...defaults, ...(JSON.parse(raw) as Partial<T>) } : defaults;
+  } catch {
+    return defaults;
+  }
+}
+
+export function saveRecorderOptions(options: object): void {
+  try {
+    localStorage.setItem(`${PREFIX}recorder`, JSON.stringify(options));
+  } catch {
+    /* ignore */
+  }
+}

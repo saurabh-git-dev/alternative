@@ -1,8 +1,8 @@
 # Tools
 
-PDF and image tools, plus developer (IT) tools, that run entirely in your
-browser. Files are processed on your device with WebAssembly engines and are
-never uploaded.
+PDF, image and video tools, a screen recorder, and developer (IT) tools, that
+run entirely in your browser. Files are processed on your device with
+WebAssembly engines and the browser's own codecs, and are never uploaded.
 
 ## Tools
 
@@ -16,6 +16,26 @@ never uploaded.
 | Images | Compress, Resize, Crop, Remove background (AI), Upscale 2–4× (AI), Convert, Photo editor, Rotate, Watermark, Remove photo info, Image → text (OCR) |
 | Automate | Pipelines: chain tools and run them in one go, with ready-made recipes |
 | Share | Share as link or QR code: any small file, or pasted text, CSV or JSON, packed into the link itself. Send to / get files from your phone: any size, either way, over a lasting end-to-end encrypted connection, with previews and an in-app QR scanner |
+
+### Video (`video/`)
+
+| Area | Tools |
+|---|---|
+| Edit | Trim (exact or instant), Crop (16:9, 9:16, 1:1 …), Blur or hide area (blur, pixelate or solid box, with time spans), Rotate or flip |
+| Compress & convert | Compress (by quality or target size), Resize, Convert (MP4, WebM, MOV, from AVI, MKV, WMV …), Remove audio |
+| Export | Video to GIF, Extract audio (MP3, M4A, WAV, Ogg), Save a frame |
+
+WebCodecs (hardware encoders, no download) does the work, with ffmpeg.wasm
+as an automatic fallback for other formats and browsers. See
+[docs/video.md](docs/video.md).
+
+### Screen recorder (`record/`)
+
+Record your screen, camera and microphone like Loom: screen + camera bubble,
+screen only or camera only, computer sound, pause/resume. Recordings are
+saved in the browser as they're made (a crash loses at most a second), and
+can be watched, renamed, shared to another device, downloaded, edited in the
+video tools or deleted later. See [docs/screen-recorder.md](docs/screen-recorder.md).
 
 ### IT tools (`it/`)
 
@@ -40,8 +60,9 @@ settings are remembered per tool (passwords never are).
 
 Everything works on phones too. Tools that download large engines or need a
 lot of memory (AI background removal and upscaling, OCR, Ghostscript
-compression) show a heads-up on phones and low-memory computers, and use
-safer limits there.
+compression, video re-encoding) show a heads-up on phones and low-memory
+computers, and use safer limits there. Phone browsers can't record the
+screen, so the recorder offers the camera there.
 
 ## Getting started
 
@@ -85,6 +106,10 @@ still works without them, just single-threaded.
 | [ONNX Runtime Web](https://onnxruntime.ai/) | runs the AI models (WebGPU, or WASM on the CPU) | MIT | 22 MB |
 | [BRIA RMBG-1.4](https://huggingface.co/briaai/RMBG-1.4) | background removal model | CC BY-NC 4.0 (non-commercial) | 44 MB |
 | [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) general x4v3 | upscaling model | BSD-3-Clause | 5 MB |
+| [Mediabunny](https://mediabunny.dev) (WebCodecs) | video reading, writing and conversion with the browser's own codecs | MPL-2.0 | 0.5 MB |
+| [ffmpeg.wasm](https://github.com/ffmpegwasm/ffmpeg.wasm) core | video fallback: other formats, codecs and browsers | GPL-2.0-or-later | 32 MB |
+| [gifenc](https://github.com/mattdesl/gifenc) | GIF encoding | MIT | 9 KB |
+| [LAME](https://lame.sourceforge.io/) via `@mediabunny/mp3-encoder` | MP3 for Extract audio | LGPL (LAME), MPL-2.0 | 0.3 MB |
 
 Engines load only when a tool needs them and are cached by the browser after.
 English OCR data ships with the app; other OCR languages are fetched once from
@@ -98,6 +123,8 @@ jsDelivr when first used, then cached.
 - [Pipelines](docs/pipelines.md): chaining tools, type checks, recipes
 - [Share links](docs/share-links.md): the link and QR formats, their size limits, and direct transfers for big files
 - [IT tools](docs/it-tools.md): the `it/` section, how sharing fits in, adding a tool
+- [Video](docs/video.md): the `video/` section, WebCodecs and ffmpeg.wasm, defaults
+- [Screen recorder](docs/screen-recorder.md): recording, storage in the browser, the library
 
 ## License
 

@@ -15,6 +15,21 @@ const EXTENSION_TYPES: Record<string, string> = {
   svg: 'image/svg+xml',
   tif: 'image/tiff',
   tiff: 'image/tiff',
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  mkv: 'video/x-matroska',
+  avi: 'video/x-msvideo',
+  wmv: 'video/x-ms-wmv',
+  flv: 'video/x-flv',
+  mpg: 'video/mpeg',
+  mpeg: 'video/mpeg',
+  ts: 'video/mp2t',
+  mts: 'video/mp2t',
+  m2ts: 'video/mp2t',
+  '3gp': 'video/3gpp',
+  ogv: 'video/ogg',
 };
 
 export const TYPE_EXTENSIONS: Record<string, string> = {
@@ -24,10 +39,22 @@ export const TYPE_EXTENSIONS: Record<string, string> = {
   'image/webp': 'webp',
   'image/avif': 'avif',
   'application/zip': 'zip',
+  'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/wav': 'wav',
+  'audio/ogg': 'ogg',
 };
 
 /** MIME type of a browser File, falling back to its extension. */
 export function detectType(file: File): string {
+  // Some systems report MKV, AVI or TS files with odd or generic types; the extension is more reliable.
+  if ((!file.type || file.type === 'application/octet-stream' || file.type === 'video/vnd.dlna.mpeg-tts') && EXTENSION_TYPES[extensionOf(file.name)]) {
+    return EXTENSION_TYPES[extensionOf(file.name)];
+  }
   if (file.type) return file.type;
   return EXTENSION_TYPES[extensionOf(file.name)] ?? 'application/octet-stream';
 }
