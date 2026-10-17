@@ -13,7 +13,7 @@
   import { DirectTransfer, inviteLink, parseInvite, type ConnectionState, type Progress } from '../../core/direct';
   import { appUrl } from '../../core/share';
   import { download, formatBytes } from '../../core/files';
-  import { takeHandoff } from '../handoff.svelte';
+  import { takeHandoffFiles } from '../handoff.svelte';
   import Dropzone from '../components/Dropzone.svelte';
   import QrCode from '../components/QrCode.svelte';
   import FilePreview from '../components/FilePreview.svelte';
@@ -110,9 +110,9 @@
     batches.unshift({ id, direction: 'send', files, done: 0, total: files.reduce((n, f) => n + f.size, 0), status: 'queued', current: files[0].name });
   }
 
-  const handed = takeHandoff();
+  const handed = takeHandoffFiles();
   untrack(() => {
-    if (handed) sendFiles([new File([handed.bytes as BlobPart], handed.name, { type: handed.type })]);
+    if (handed.length) sendFiles(handed.map((f) => new File([f.bytes as BlobPart], f.name, { type: f.type })));
     if (!joining || invite) start();
   });
   $effect(() => () => transfer?.shutdown());
