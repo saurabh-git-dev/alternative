@@ -19,6 +19,7 @@
   import { detectTextType } from '../../core/text-formats';
   import { fitImage } from '../../core/runner';
   import { handoff, takeHandoff } from '../handoff.svelte';
+  import { isConnected } from '../transfer.svelte';
   import Dropzone from '../components/Dropzone.svelte';
   import QrCode from '../components/QrCode.svelte';
 
@@ -195,7 +196,6 @@
         <div class="nofit">
           <strong>Too big for a QR code.</strong>
           <p class="muted small">One QR code holds up to {formatBytes(capacity)}; this needs {formatBytes(packed.length)}. The link below still works: copy it or send it to your phone.</p>
-          <p class="muted small">Or <button class="linkish" onclick={sendDirect}>send it directly</button>: scan a small QR code and the file goes straight to your phone, end-to-end encrypted.</p>
           {#if isImage}
             {#if fitting}
               <div class="progress"><div style="width: {Math.round(fitting.fraction * 100)}%"></div></div>
@@ -221,19 +221,29 @@
           <p class="warn small">This is a very long link. It works when pasted into a browser, but chat apps and email may cut it off.</p>
         {/if}
       </div>
+
+      <div class="direct">
+        <button class="btn" onclick={sendDirect}>📡 {isConnected() ? 'Send to connected device' : 'Send over a direct connection'}</button>
+        <p class="muted small">
+          {isConnected()
+            ? 'Goes straight to the device you are connected to.'
+            : 'No size limit, end-to-end encrypted, and the connection stays open for more files. Both devices need to be online.'}
+        </p>
+      </div>
     {/if}
   </section>
 </div>
 
 <style>
-  .linkish {
-    border: 0;
-    padding: 0;
-    background: none;
-    color: var(--accent);
-    font: inherit;
-    text-decoration: underline;
-    cursor: pointer;
+  .direct {
+    display: grid;
+    justify-items: start;
+    gap: 6px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .direct p {
+    margin: 0;
   }
   .back {
     display: inline-block;

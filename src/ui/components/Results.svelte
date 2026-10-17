@@ -3,10 +3,14 @@
   comparison for images that came from images (e.g. compression).
 -->
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { FileData, OutputFile } from '../../core/types';
   import { download, formatBytes, toBlob, zipFiles } from '../../core/files';
   import CompareSlider from './CompareSlider.svelte';
+  import FilePreview from './FilePreview.svelte';
+  import PdfViewer from './PdfViewer.svelte';
   import { fitsQr as fitsOneQr, sendFiles, shareFile } from '../share-target';
+  import { isConnected } from '../transfer.svelte';
 
   let {
     results,
@@ -22,6 +26,21 @@
   });
 
   let comparing = $state<number | null>(null);
+  let viewing = $state<number | null>(null);
+
+  const isText = (r: OutputFile) => /^text\/|^application\/json$/.test(r.type);
+  const asFile = (r: OutputFile) => new File([r.bytes as BlobPart], r.name, { type: r.type });
+  /** Text results (e.g. OCR) show their text right away when there are only a few. */
+  let showText = $state<Record<number, boolean>>(
+    untrack(() => Object.fromEntries(results.flatMap((r, i) => (isText(r) && results.length <= 3 ? [[i, true]] : [])))),
+  );
+  let copied = $state<number | null>(null);
+
+  async function copyText(r: OutputFile, i: number) {
+    await navigator.clipboard.writeText(new TextDecoder().decode(r.bytes));
+    copied = i;
+    setTimeout(() => (copied = null), 1500);
+  }
   let zipping = $state(false);
 
   const totalIn = $derived(
@@ -44,9 +63,12 @@
     }
   }
 
+  /** Before → after sizes only compare like with like (not an image with its OCR text). */
+  const comparable = (r: OutputFile) => oneToOne && !!r.inputSize && r.type.split('/')[0] === inputs[r.inputIndex!]?.type.split('/')[0];
+
   function delta(r: OutputFile): string | null {
-    if (!oneToOne || !r.inputSize) return null;
-    const change = r.bytes.length / r.inputSize - 1;
+    if (!comparable(r)) return null;
+    const change = r.bytes.length / r.inputSize! - 1;
     if (Math.abs(change) < 0.005) return 'same size';
     return `${change < 0 ? '−' : '+'}${Math.abs(Math.round(change * 100))}%`;
   }
@@ -113,7 +135,7 @@
       <div class="meta">
         <div class="name" title={r.name}>{r.name}</div>
         <div class="muted small">
-          {#if oneToOne && r.inputSize}{formatBytes(r.inputSize)} →{" "}{/if}{formatBytes(r.bytes.length)}
+          {#if comparable(r)}{formatBytes(r.inputSize!)} →{" "}{/if}{formatBytes(r.bytes.length)}
           {#if delta(r)}<span class:good={r.bytes.length < (r.inputSize ?? 0)}> ({delta(r)})</span>{/if}
         </div>
         {#if r.note}<div class="note small">{r.note}</div>{/if}
@@ -122,13 +144,20 @@
         <button class="btn" onclick={() => (comparing = i)}>Compare</button>
       {/if}
       {#if r.type === 'application/pdf'}
-        <a class="btn" href={urls[i]} target="_blank" rel="noopener">Open</a>
+        <button class="btn" onclick={() => (viewing = i)}>📖 View</button>
+      {/if}
+      {#if isText(r)}
+        <button class="btn" onclick={() => (showText[i] = !showText[i])}>{showText[i] ? 'Hide text' : 'Show text'}</button>
+        <button class="btn" onclick={() => copyText(r, i)}>{copied === i ? '✓ Copied' : 'Copy'}</button>
       {/if}
       <button class="btn" onclick={() => download(toBlob(r), r.name)}>Download</button>
-      {#if fitsQr[i]}
+      {#if fitsQr[i] && !isConnected()}
         <button class="btn" title="Small enough for a QR code: scan it with your phone to get the file" onclick={() => share(r, i)}>📱 QR code</button>
       {:else}
         <button class="btn" title="Too big for a QR code: send it to your phone over a direct, encrypted connection" onclick={() => share(r, i)}>📡 Send to phone</button>
+      {/if}
+      {#if isText(r) && showText[i]}
+        <div class="textout"><FilePreview file={asFile(r)} /></div>
       {/if}
     </li>
   {/each}
@@ -139,6 +168,10 @@
   <button class="btn" onclick={onReset}>Start over with new files</button>
   <a class="btn" href="#/">Use another tool</a>
 </div>
+
+{#if viewing !== null}
+  <PdfViewer file={asFile(results[viewing])} onClose={() => (viewing = null)} />
+{/if}
 
 {#if comparing !== null}
   {@const r = results[comparing]}
@@ -188,6 +221,7 @@
   }
   li {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
@@ -211,6 +245,10 @@
     font-size: 11px;
     font-weight: 700;
     color: var(--text-3);
+  }
+  .textout {
+    flex-basis: 100%;
+    min-width: 0;
   }
   .player {
     display: grid;

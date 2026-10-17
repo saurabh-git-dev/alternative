@@ -112,11 +112,17 @@ export async function runPipeline(
   onProgress: (fraction: number, message: string) => void,
 ): Promise<OutputFile[]> {
   let current: OutputFile[] = files.map((f, i) => ({ ...f, inputIndex: i, inputSize: f.bytes.length }));
+  /** Extra outputs the next step can't take (e.g. OCR's .txt beside the PDF): kept as final results. */
+  const sideOutputs: OutputFile[] = [];
   const total = pipeline.steps.length;
   for (const [i, step] of pipeline.steps.entries()) {
     const action = getAction(step.actionId)!;
     const label = `Step ${i + 1} of ${total}: ${action.title}`;
     onProgress(i / total, label);
+    if (i > 0) {
+      sideOutputs.push(...current.filter((f) => !acceptsType(action, f.type)));
+      current = current.filter((f) => acceptsType(action, f.type));
+    }
     const origins = current.map((f) => f.inputIndex);
     const out = await runStep(action, current, step.params, (f, m) => onProgress((i + f) / total, m ? `${label} · ${m}` : label));
     for (const o of out) {
@@ -129,7 +135,7 @@ export async function runPipeline(
     current = out;
   }
   onProgress(1, 'Done');
-  return current;
+  return [...current, ...sideOutputs];
 }
 
 // ---------------------------------------------------------------------------

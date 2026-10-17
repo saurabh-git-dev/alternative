@@ -33,6 +33,7 @@
   import { LINK_ROUTE, QR_ROUTE } from '../core/share';
   import { DIRECT_ROUTE } from '../core/direct';
   import { getAction } from '../actions';
+  import { isLive, session } from './transfer.svelte';
   import { loadTheme, saveTheme, type Theme } from './settings';
 
   let hash = $state(location.hash);
@@ -149,7 +150,14 @@
   <span class="badge" title="Every tool runs inside your browser using WebAssembly. Nothing is uploaded.">
     🔒 Files never leave your device
   </span>
-  <a class="scan" href="#/scan" title="Scan a QR code from your other device to connect or open a shared file">📷 <span>Scan</span></a>
+  {#if isLive() && page !== 'direct'}
+    <!-- A direct-transfer session stays open across pages; this gets back to it. -->
+    <a class="scan live" href="#/direct" title="Back to your connected device">
+      📡 <span>{session.conn?.state === 'connected' ? 'Connected' : session.conn?.state === 'reconnecting' ? 'Reconnecting…' : 'Waiting…'}</span>
+    </a>
+  {:else}
+    <a class="scan" href="#/scan" title="Scan a QR code from your other device to connect or open a shared file">📷 <span>Scan</span></a>
+  {/if}
   <button class="icon-btn" onclick={toggleTheme} aria-label="Switch to {theme === 'dark' ? 'light' : 'dark'} theme">
     {theme === 'dark' ? '☀️' : '🌙'}
   </button>
@@ -184,7 +192,7 @@
     <Scan />
   {:else if page === 'direct'}
     {#key hash}
-      <Direct {hash} />
+      <Direct {hash} onOpen={openTool} />
     {/key}
   {:else if page === 'received'}
     <Received {hash} onOpen={openTool} />
@@ -286,6 +294,11 @@
   }
   .scan:hover {
     border-color: var(--accent);
+  }
+  .scan.live {
+    border-color: var(--success);
+    color: var(--success);
+    background: var(--success-soft);
   }
   .loading {
     text-align: center;
