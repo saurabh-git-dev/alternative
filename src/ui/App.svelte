@@ -69,24 +69,24 @@
 
   $effect(() => {
     document.title = action
-      ? `${action.title} · Formatter`
+      ? `${action.title} · Tools`
       : itTool
       ? `${itTool.title} · IT tools`
       : page === 'it-home'
-      ? 'IT tools · Formatter'
+      ? 'IT tools'
       : page === 'pipeline'
-        ? 'Pipeline · Formatter'
+        ? 'Pipeline · Tools'
         : page === 'compare'
-        ? 'Compare PDFs · Formatter'
+        ? 'Compare PDFs · Tools'
         : page === 'share'
-        ? 'Share as link or QR · Formatter'
+        ? 'Share as link or QR · Tools'
         : page === 'scan'
-        ? 'Scan to connect · Formatter'
+        ? 'Scan to connect · Tools'
         : page === 'direct'
-        ? 'Send between devices · Formatter'
+        ? 'Send between devices · Tools'
         : page === 'received'
-          ? 'Shared file · Formatter'
-          : 'Formatter · PDF & image tools';
+          ? 'Shared file · Tools'
+          : 'Tools · PDF, image & IT tools in your browser';
   });
 
   function toggleTheme() {
@@ -102,8 +102,8 @@
 
 <header>
   <a class="logo" href="#/">
-    <span class="mark" aria-hidden="true">F</span>
-    <span class="name">Formatter</span>
+    <span class="mark" aria-hidden="true">T</span>
+    <span class="name">Tools</span>
   </a>
   <nav class="sections" aria-label="Sections">
     <a href={FILES_HOME} class:active={section === 'files'} aria-current={section === 'files' ? 'page' : undefined}><span aria-hidden="true">📄</span> PDF & Image</a>

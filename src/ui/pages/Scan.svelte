@@ -131,7 +131,7 @@
 
   {#if notOurs}
     <p class="note">
-      {#if notOurs.startsWith('No QR code')}{notOurs}{:else}That code isn't a Formatter connection or share link. It says: <code>{notOurs.slice(0, 200)}</code>{/if}
+      {#if notOurs.startsWith('No QR code')}{notOurs}{:else}That code isn't a Tools connection or share link. It says: <code>{notOurs.slice(0, 200)}</code>{/if}
     </p>
   {/if}
 

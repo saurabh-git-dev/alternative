@@ -1,4 +1,4 @@
-# Formatter
+# Tools
 
 PDF and image tools, plus developer (IT) tools, that run entirely in your
 browser. Files are processed on your device with WebAssembly engines and are
