@@ -60,7 +60,16 @@ closes the page.
   code with the camera inside the app: BarcodeDetector where the browser has
   it, the jsQR decoder elsewhere (iOS Safari), or a photo of the code.
 - Received images, PDFs, CSV, JSON, text, audio and video preview in place
-  (`src/ui/components/FilePreview.svelte`, shared with share links).
+  (`src/ui/components/FilePreview.svelte`, shared with share links and tool
+  results). PDFs open in a full viewer (`PdfViewer.svelte`) that draws every
+  page as you scroll, so they read the same on phones that can't show PDFs.
+- **Edit** on a received file (`EditMenu.svelte`) lists every tool for its
+  type: PDF, image and video tools open in this tab with the file loaded;
+  IT tools for text open in a new tab with the text filled in.
+- The session lives outside any page (`src/ui/transfer.svelte.ts`), so it
+  stays connected while you use tools; the header shows **📡 Connected** to
+  get back to it, and a result's **Send to phone** goes over it. Switching to
+  another section (a different page) or closing the tab ends it.
 
 The QR code holds `<app>#/d/<id>.<secret>.<s|r>`: a random peer ID, a
 128-bit secret and which side started with files. A free public matchmaker

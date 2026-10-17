@@ -3,6 +3,10 @@
   either side can send files of any size, as often as it likes, without
   scanning again (see core/direct.ts). Received files can be previewed here.
 
+  The session itself lives in ui/transfer.svelte.ts, so it stays open while
+  you use other pages (e.g. edit a received file in a tool, then send the
+  result back).
+
   Three ways in:
   - `#/direct`          start a session with files to send (handed over from Share or Home, or picked here).
   - `#/direct/receive`  start a session to receive (e.g. photos from a phone).
@@ -10,112 +14,50 @@
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { DirectTransfer, inviteLink, parseInvite, type ConnectionState, type Progress } from '../../core/direct';
+  import { inviteLink, parseInvite } from '../../core/direct';
   import { appUrl } from '../../core/share';
   import { download, formatBytes } from '../../core/files';
   import { takeHandoffFiles } from '../handoff.svelte';
+  import { endSession, isLive, sendOverSession, session, startSession } from '../transfer.svelte';
   import Dropzone from '../components/Dropzone.svelte';
   import QrCode from '../components/QrCode.svelte';
   import FilePreview from '../components/FilePreview.svelte';
+  import EditMenu from '../components/EditMenu.svelte';
 
-  let { hash }: { hash: string } = $props();
-
-  interface Batch {
-    id: string;
-    direction: 'send' | 'receive';
-    files: File[];
-    done: number;
-    total: number;
-    status: 'queued' | 'active' | 'complete' | 'interrupted';
-    /** Name of the file going across right now. */
-    current: string;
-  }
+  let { hash, onOpen }: { hash: string; onOpen: (id: string, files: File[]) => void } = $props();
 
   const route = untrack(() => hash);
   const invite = parseInvite(route);
-  const joining = route.startsWith('#/d/');
   /** Did this session start with files to send from this device? */
   const startsSending = invite ? !invite.hostSends : route !== '#/direct/receive';
 
-  let conn = $state<ConnectionState | null>(null);
-  let batches = $state<Batch[]>([]);
-  let transfer = $state<DirectTransfer | null>(null);
+  // The session lives on across pages (see ui/transfer.svelte.ts): reuse it unless this is a new invite.
+  untrack(() => {
+    const current = session.transfer;
+    const reuse = isLive() && (invite ? current?.invite.peerId === invite.peerId : true);
+    if (!reuse && (invite || !route.startsWith('#/d/'))) startSession(invite ? { invite } : { hostSends: startsSending });
+    const handed = takeHandoffFiles();
+    if (handed.length) sendOverSession(handed.map((f) => new File([f.bytes as BlobPart], f.name, { type: f.type })));
+  });
+
+  const joining = $derived(session.transfer?.role === 'guest' || (route.startsWith('#/d/') && !invite));
+  const conn = $derived(session.conn);
+  const batches = $derived(session.batches);
+  const open = $derived(session.open);
+  const transfer = $derived(session.transfer);
   let copied = $state(false);
-  /** Keys `<batch id>/<file index>` of open previews. */
-  let open = $state<Record<string, boolean>>({});
 
   const link = $derived(transfer && transfer.role === 'host' ? inviteLink(appUrl(location), transfer.invite) : '');
   const connected = $derived(conn?.state === 'connected');
   const over = $derived(conn?.state === 'ended' || conn?.state === 'failed');
 
-  function find(id: string) {
-    return batches.find((b) => b.id === id);
-  }
-
-  function onProgress(p: Progress) {
-    let batch = find(p.id);
-    if (!batch) {
-      batches.unshift({ id: p.id, direction: p.direction, files: [], done: 0, total: p.total, status: 'active', current: p.file });
-      batch = batches[0];
-    }
-    batch.status = 'active';
-    batch.done = p.done;
-    batch.total = p.total;
-    batch.current = p.file;
-  }
-
   function start() {
-    transfer?.shutdown();
-    const t = invite
-      ? DirectTransfer.join(invite, handlers())
-      : DirectTransfer.host(startsSending, handlers());
-    transfer = t;
-    // Files picked before connecting wait in the queue.
-    for (const b of batches) if (b.direction === 'send' && b.status !== 'complete') b.id = t.send(b.files);
-  }
-
-  function handlers() {
-    return {
-      onState: (s: ConnectionState) => (conn = s),
-      onProgress,
-      onReceived: (id: string, files: File[]) => {
-        const batch = find(id);
-        if (!batch) return;
-        batch.files = files;
-        batch.status = 'complete';
-        batch.done = batch.total;
-        // A single received file opens straight away.
-        if (files.length === 1) open[`${id}/0`] = true;
-      },
-      onSent: (id: string) => {
-        const batch = find(id);
-        if (batch) {
-          batch.status = 'complete';
-          batch.done = batch.total;
-        }
-      },
-      onAborted: (id: string, direction: 'send' | 'receive') => {
-        const batch = find(id);
-        if (!batch) return;
-        // Sends stay queued and restart on reconnect; partial receives are dropped.
-        batch.status = direction === 'send' ? 'queued' : 'interrupted';
-        if (direction === 'send') batch.done = 0;
-      },
-    };
+    startSession({ hostSends: startsSending });
   }
 
   function sendFiles(files: File[]) {
-    if (!files.length) return;
-    const id = transfer && !over ? transfer.send(files) : crypto.randomUUID();
-    batches.unshift({ id, direction: 'send', files, done: 0, total: files.reduce((n, f) => n + f.size, 0), status: 'queued', current: files[0].name });
+    sendOverSession(files);
   }
-
-  const handed = takeHandoffFiles();
-  untrack(() => {
-    if (handed.length) sendFiles(handed.map((f) => new File([f.bytes as BlobPart], f.name, { type: f.type })));
-    if (!joining || invite) start();
-  });
-  $effect(() => () => transfer?.shutdown());
 
   async function copyLink() {
     await navigator.clipboard.writeText(link);
@@ -125,7 +67,9 @@
 
   const canShare = (files: File[]) => typeof navigator.canShare === 'function' && navigator.canShare({ files });
 
-  const title = joining ? 'Connected devices' : startsSending ? 'Send to your phone' : 'Get files from your phone';
+  const title = $derived(
+    joining || connected ? 'Connected devices' : (transfer?.invite.hostSends ?? startsSending) ? 'Send to your phone' : 'Get files from your phone',
+  );
   /** The privacy notes start open beside the session on wide screens, folded on phones. */
   const wide = typeof matchMedia !== 'undefined' && matchMedia('(min-width: 761px)').matches;
 </script>
@@ -141,7 +85,7 @@
   </div>
 </div>
 
-{#if joining && !invite}
+{#if route.startsWith('#/d/') && !invite && !transfer}
   <div class="card box">
     <p class="error">This link is incomplete. Scan the QR code again.</p>
   </div>
@@ -174,7 +118,7 @@
         {:else if connected}
           <div class="connected">
             <p class="state ok">🔒 Connected securely</p>
-            <button class="btn" onclick={() => transfer?.end()}>End session</button>
+            <button class="btn" onclick={endSession}>End session</button>
           </div>
         {:else if conn.state === 'ended' || conn.state === 'failed'}
           <p class={conn.state === 'failed' ? 'error' : 'state'}>{conn.message}</p>
@@ -226,6 +170,7 @@
                         </button>
                         <span class="muted small size">{formatBytes(f.size)}</span>
                         {#if canShare([f])}<button class="btn" onclick={() => navigator.share({ files: [f] }).catch(() => {})}>Save…</button>{/if}
+                        <EditMenu file={f} {onOpen} />
                         <button class="btn btn-primary" onclick={() => download(f, f.name)}>⬇ Download</button>
                       </div>
                       {#if open[key]}
@@ -400,7 +345,7 @@
   }
   .file {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto auto auto;
     align-items: center;
     gap: 8px;
   }
@@ -452,7 +397,11 @@
       font-size: 24px;
     }
     .file {
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: repeat(3, auto);
+      justify-content: start;
+    }
+    .file .fname {
+      grid-column: 1 / -1;
     }
     .file .size {
       display: none;

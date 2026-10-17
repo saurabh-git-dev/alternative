@@ -54,4 +54,19 @@ describe('pipelines', () => {
     expect(out.map((o) => o.inputIndex)).toEqual([0, 0, 1, 1]);
     expect(out.map((o) => o.inputSize)).toEqual([10, 10, 11, 11]);
   });
+
+  it("keeps extra outputs the next step can't take as final results", async () => {
+    const p: Pipeline = { name: 't', steps: [step('pdf.ocr'), step('pdf.compress')] };
+    const pdf = { name: 'a.pdf', type: 'application/pdf', bytes: new Uint8Array(10) };
+    const seen: string[][] = [];
+    const out = await runPipeline(p, [pdf], async (action, input) => {
+      seen.push(input.map((f) => f.type));
+      // OCR returns the PDF plus its text; compress passes through.
+      return action.id === 'pdf.ocr'
+        ? [{ ...input[0], inputIndex: 0 }, { name: 'a.txt', type: 'text/plain', bytes: new Uint8Array(3), inputIndex: 0 }]
+        : input.map((f, i) => ({ ...f, inputIndex: i }));
+    }, () => {});
+    expect(seen).toEqual([['application/pdf'], ['application/pdf']]);
+    expect(out.map((o) => o.type)).toEqual(['application/pdf', 'text/plain']);
+  });
 });

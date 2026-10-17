@@ -43,6 +43,12 @@ export const ocrPdf: ActionDefinition = {
       options: [{ value: '', label: 'None' }, ...OCR_LANGUAGES],
       advanced: true,
     },
+    saveText: {
+      kind: 'boolean',
+      label: 'Also save the text (.txt)',
+      help: 'A plain-text file of everything on the pages, shown on the results page to read or copy.',
+      default: true,
+    },
     skipText: {
       kind: 'boolean',
       label: 'Skip pages that already have text',
@@ -81,8 +87,27 @@ export const ocrPdf: ActionDefinition = {
     const pages = parseRanges(params.pages as string, doc.getPageCount());
     const hasText = params.skipText ? await mupdfEngine.pagesWithText(file.bytes) : new Set<number>();
     const todo = pages.filter((p) => !hasText.has(p));
+    /** Text of each page, for the .txt: recognised pages fill in as they go, pages with text already are read directly. */
+    const texts = new Map<number, string>();
+    if (params.saveText && hasText.size) {
+      const existing = await mupdfEngine.pageTexts(file.bytes);
+      for (const p of pages) if (hasText.has(p)) texts.set(p, existing[p - 1] ?? '');
+    }
+    const textFile = () =>
+      params.saveText
+        ? [{
+            name: `${baseName(file.name)}-text.txt`,
+            type: 'text/plain',
+            bytes: new TextEncoder().encode(
+              pages.map((p) => (pages.length > 1 ? `--- Page ${p} ---\n` : '') + (texts.get(p) ?? '').trim()).join('\n\n') + '\n',
+            ),
+          }]
+        : [];
     if (todo.length === 0) {
-      return [{ name: `${baseName(file.name)}-ocr.pdf`, type: 'application/pdf', bytes: file.bytes, note: 'Every page already has text, so nothing needed doing.' }];
+      return [
+        { name: `${baseName(file.name)}-ocr.pdf`, type: 'application/pdf', bytes: file.bytes, note: 'Every page already has text, so nothing needed doing.' },
+        ...textFile(),
+      ];
     }
 
     let found = 0;
@@ -101,6 +126,7 @@ export const ocrPdf: ActionDefinition = {
         pdfTextOnly: true,
         onProgress: (f, m) => report(f * 0.5, m),
       });
+      texts.set(pageNumber, result.text);
       if (!result.pdf || result.words.length === 0) continue;
       found += result.words.length;
 
@@ -119,6 +145,6 @@ export const ocrPdf: ActionDefinition = {
 
     const bytes = await doc.save({ useObjectStreams: true });
     const note = found === 0 ? 'No text was recognised. Check the language setting.' : undefined;
-    return [{ name: `${baseName(file.name)}-ocr.pdf`, type: 'application/pdf', bytes, note }];
+    return [{ name: `${baseName(file.name)}-ocr.pdf`, type: 'application/pdf', bytes, note }, ...textFile()];
   },
 };
