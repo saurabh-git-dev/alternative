@@ -120,6 +120,17 @@
       open: () => (location.hash = '#/scan'),
     },
     {
+      key: 'it',
+      icon: '🛠️',
+      title: 'IT tools',
+      description: 'JSON, Base64, hashes, UUIDs, JWT, regex, cron, colors and 25 more.',
+      keywords: 'developer dev json base64 hash uuid password jwt regex encode decode convert',
+      group: 'more',
+      href: 'it/',
+      takes: (files) => files.length === 0,
+      open: () => (location.href = 'it/'),
+    },
+    {
       key: 'pipeline',
       icon: '⛓️',
       title: 'Build a pipeline',

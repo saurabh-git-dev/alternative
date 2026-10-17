@@ -1,7 +1,8 @@
 # Formatter
 
-PDF and image tools that run entirely in your browser. Files are processed on
-your device with WebAssembly engines and are never uploaded.
+PDF and image tools, plus developer (IT) tools, that run entirely in your
+browser. Files are processed on your device with WebAssembly engines and are
+never uploaded.
 
 ## Tools
 
@@ -15,6 +16,23 @@ your device with WebAssembly engines and are never uploaded.
 | Images | Compress, Resize, Crop, Remove background (AI), Upscale 2–4× (AI), Convert, Photo editor, Rotate, Watermark, Remove photo info, Image → text (OCR) |
 | Automate | Pipelines: chain tools and run them in one go, with ready-made recipes |
 | Share | Share as link or QR code: any small file, or pasted text, CSV or JSON, packed into the link itself. Send to / get files from your phone: any size, either way, over a lasting end-to-end encrypted connection, with previews and an in-app QR scanner |
+
+### IT tools (`it/`)
+
+An [IT-Tools](https://github.com/CorentinTh/it-tools)-style set of developer
+utilities, linked from the header switch on every page:
+
+| Area | Tools |
+|---|---|
+| Crypto & secrets | Password & token generator, UUID v4/v7 & ULID, Hash text (MD5, SHA-1/256/384/512), File checksum, HMAC, Encrypt text (AES-256) |
+| Converters | Base64, Date & time, Number bases, Colors, JSON ↔ YAML, JSON ↔ CSV, Case, Text ↔ binary, Unicode escape, Roman numerals, NATO alphabet |
+| Web & network | URL encode/decode, URL parser, HTML entities, JWT decoder, QR code (text, links, Wi-Fi), IPv4 subnets, HTTP status codes, Device info |
+| Development | JSON formatter, Regex tester, Text diff, Cron explainer, Chmod calculator |
+| Text | Text statistics, Slugify, Lorem ipsum |
+
+Every output can be copied, saved, or shared to your phone (QR code when it
+fits, direct encrypted transfer when it doesn't), and most tools can copy a
+link that reopens them with the same input.
 
 Every tool opens with recommended settings. Presets cover the common cases,
 and an **Advanced settings** drawer exposes every parameter. Your last-used
@@ -79,6 +97,7 @@ jsDelivr when first used, then cached.
 - [Engines](docs/engines.md): what each engine does, defaults, and why
 - [Pipelines](docs/pipelines.md): chaining tools, type checks, recipes
 - [Share links](docs/share-links.md): the link and QR formats, their size limits, and direct transfers for big files
+- [IT tools](docs/it-tools.md): the `it/` section, how sharing fits in, adding a tool
 
 ## License
 

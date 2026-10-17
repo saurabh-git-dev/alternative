@@ -69,7 +69,16 @@ export default defineConfig({
   server: { headers: isolationHeaders },
   preview: { headers: isolationHeaders },
   worker: { format: 'es' },
-  build: { target: 'es2022' },
+  build: {
+    target: 'es2022',
+    // Two pages, one app: PDF & image tools at the root, IT tools at it/ (see src/ui/section.ts).
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        it: fileURLToPath(new URL('./it/index.html', import.meta.url)),
+      },
+    },
+  },
   // WASM packages locate their .wasm files relative to import.meta.url,
   // which breaks if Vite pre-bundles them.
   optimizeDeps: {

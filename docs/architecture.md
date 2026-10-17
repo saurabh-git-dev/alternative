@@ -29,6 +29,7 @@ Home ─► Tool page                worker.ts
 | `src/engines/` | one thin wrapper per engine; the only place engine APIs are called |
 | `src/actions/` | one file per tool, plus `index.ts` (the registry) |
 | `src/ui/` | Svelte components; nothing tool-specific, except pages whose result is a view rather than a file (`Share`, `Received`, `Pipeline`, `Compare`), listed on the home page next to the actions |
+| `src/it/`, `src/ui/it/` | IT tools section at `it/` (see [it-tools.md](it-tools.md)) |
 | `tests/` | Vitest unit tests |
 
 ## Key decisions

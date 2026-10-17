@@ -6,8 +6,7 @@
   import type { FileData, OutputFile } from '../../core/types';
   import { download, formatBytes, toBlob, zipFiles } from '../../core/files';
   import CompareSlider from './CompareSlider.svelte';
-  import { handoff } from '../handoff.svelte';
-  import { QR_ROUTE, appUrl, pack, qrCapacity } from '../../core/share';
+  import { fitsQr as fitsOneQr, sendFiles, shareFile } from '../share-target';
 
   let {
     results,
@@ -50,21 +49,15 @@
     return `${change < 0 ? '−' : '+'}${Math.abs(Math.round(change * 100))}%`;
   }
 
-  /** Biggest file that could still pack into one QR code; above it, skip the (costly) packing test. */
-  const QR_PRECHECK_BYTES = 64 * 1024;
-  const qrRoom = qrCapacity(`${appUrl(location)}#${QR_ROUTE}`, 'L');
-
   /** Small files share as a QR code (Share page); bigger ones over a direct, encrypted connection. */
-  const fitsQr = $derived(results.map((r) => r.bytes.length <= QR_PRECHECK_BYTES && pack(r).length <= qrRoom));
+  const fitsQr = $derived(results.map((r) => fitsOneQr(r)));
 
   function share(r: OutputFile, i: number) {
-    handoff.file = { name: r.name, type: r.type, bytes: r.bytes };
-    location.hash = fitsQr[i] ? '#/share' : '#/direct';
+    shareFile({ name: r.name, type: r.type, bytes: r.bytes }, fitsQr[i]);
   }
 
   function sendAll() {
-    handoff.files = results.map((r) => ({ name: r.name, type: r.type, bytes: r.bytes }));
-    location.hash = '#/direct';
+    sendFiles(results.map((r) => ({ name: r.name, type: r.type, bytes: r.bytes })));
   }
 
   function canCompare(r: OutputFile): boolean {
