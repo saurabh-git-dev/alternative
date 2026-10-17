@@ -10,6 +10,8 @@
   import FilePreview from '../components/FilePreview.svelte';
   import { ACTIONS } from '../../actions';
   import { accepts } from '../../core/files';
+  import { suggestItTools } from '../../it/suggest';
+  import { itToolHref } from '../section';
 
   let { hash, onOpen }: { hash: string; onOpen: (id: string, files: File[]) => void } = $props();
 
@@ -35,6 +37,8 @@
   const isText = $derived(kind === 'csv' || kind === 'json' || kind === 'text');
   const text = $derived(file && isText ? new TextDecoder().decode(file.bytes) : '');
   const tools = $derived(file ? ACTIONS.filter((a) => accepts(a, file.type)) : []);
+  /** IT tools that fit text (Decrypt, Format JSON …), opened with this text already in. */
+  const itTools = $derived(file && isText ? suggestItTools(file.type, text) : []);
 
   let summary = $state('');
 
@@ -80,11 +84,14 @@
     <FilePreview file={asObject!} bind:summary />
   </div>
 
-  {#if tools.length}
+  {#if tools.length || itTools.length}
     <div class="more">
       <span class="muted small">Do more with it:</span>
       {#each tools as tool (tool.id)}
         <button class="chip" onclick={() => onOpen(tool.id, [asFile()])}>{tool.icon} {tool.title}</button>
+      {/each}
+      {#each itTools as s (s.tool)}
+        <a class="chip" href={itToolHref(s.tool, { input: text, options: s.options ?? {} })}>{s.label}</a>
       {/each}
     </div>
   {/if}
@@ -150,6 +157,8 @@
     margin-top: 16px;
   }
   .chip {
+    color: var(--text);
+    text-decoration: none;
     padding: 6px 12px;
     border-radius: 99px;
     border: 1px solid var(--border);

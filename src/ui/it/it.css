@@ -1,0 +1,184 @@
+/*
+ * Shared layout for IT tool pages: an input pane and an output pane, side by
+ * side on wide screens, stacked on phones. Global on purpose so custom tools
+ * (ui/it/tools/) look like the generic transform page with no extra CSS.
+ */
+.it-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.it-panes.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 820px) {
+  .it-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.it-pane {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  min-width: 0;
+}
+.it-pane-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-height: 30px;
+}
+.it-pane-head h2 {
+  margin: 0 auto 0 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.it-text,
+.it-input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.it-text {
+  min-height: 180px;
+  resize: vertical;
+}
+@media (min-width: 821px) {
+  .it-text {
+    min-height: 300px;
+  }
+}
+.it-text[readonly] {
+  background: var(--surface-2);
+}
+.it-input.plain {
+  font-family: inherit;
+  font-size: 15px;
+}
+.it-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.it-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.it-field > span {
+  color: var(--text-2);
+}
+.it-field select,
+.it-field input[type='number'],
+.it-field input[type='text'],
+.it-field input[type='password'] {
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  min-width: 0;
+}
+.it-field input[type='number'] {
+  width: 84px;
+}
+.it-help {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.it-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 14px;
+}
+.it-mini {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.it-mini:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.it-mini.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.it-segmented {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  flex-wrap: wrap;
+}
+.it-segmented button {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 550;
+}
+.it-segmented button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.it-rows {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+.it-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 28%) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.it-row:last-child {
+  border-bottom: 0;
+}
+.it-row dt {
+  font-size: 13px;
+  color: var(--text-2);
+  padding-top: 2px;
+}
+.it-row dd {
+  margin: 0;
+  font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+@media (max-width: 560px) {
+  .it-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .it-row dt {
+    grid-column: 1 / -1;
+    padding: 0;
+  }
+  .it-pane {
+    padding: 12px;
+  }
+}

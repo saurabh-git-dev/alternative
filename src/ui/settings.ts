@@ -95,3 +95,25 @@ function writePipelines(list: Pipeline[]): void {
     /* storage unavailable */
   }
 }
+
+// ---------------------------------------------------------------------------
+// IT tool options (secret options such as passwords and keys are never stored)
+// ---------------------------------------------------------------------------
+
+export function loadItOptions(id: string): Record<string, unknown> {
+  try {
+    const raw = localStorage.getItem(`${PREFIX}it:${id}`);
+    return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** `values` should already be free of secrets; see ui/it/TransformTool.svelte. */
+export function saveItOptions(id: string, values: Record<string, unknown>): void {
+  try {
+    localStorage.setItem(`${PREFIX}it:${id}`, JSON.stringify(values));
+  } catch {
+    /* storage unavailable */
+  }
+}
