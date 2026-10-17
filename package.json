@@ -28,6 +28,7 @@
     "comlink": "^4.4.2",
     "diff": "^9.0.0",
     "fflate": "^0.8.3",
+    "jsqr": "^1.4.0",
     "mupdf": "^1.28.1",
     "node-forge": "^1.4.0",
     "onnxruntime-web": "^1.22.0",

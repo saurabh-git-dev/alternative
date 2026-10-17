@@ -2,7 +2,8 @@
   App shell: header and a tiny hash router.
   Routes: `#/` (home), `#/tool/<action id>`, `#/share`, share links
   `#/s/<data>` / `#/q/<data>` (see core/share.ts), direct transfers
-  `#/direct`, `#/direct/receive` and `#/d/<invite>` (see core/direct.ts), `#/pipeline[/<data>]`
+  `#/direct`, `#/direct/receive` and `#/d/<invite>` (see core/direct.ts),
+  `#/scan` (in-app QR scanner), `#/pipeline[/<data>]`
   (see core/pipeline.ts) and `#/compare`. Hash routing works on any
   static host with no server configuration.
 -->
@@ -14,6 +15,7 @@
   import PipelinePage from './pages/Pipeline.svelte';
   import Compare from './pages/Compare.svelte';
   import Direct from './pages/Direct.svelte';
+  import Scan from './pages/Scan.svelte';
   import { PIPELINE_ROUTE } from '../core/pipeline';
   import { LINK_ROUTE, QR_ROUTE } from '../core/share';
   import { DIRECT_ROUTE } from '../core/direct';
@@ -45,6 +47,8 @@
           ? 'compare'
           : hash === '#/share'
           ? 'share'
+          : hash === '#/scan'
+          ? 'scan'
           : hash === '#/direct' || hash === '#/direct/receive' || hash.startsWith(`#${DIRECT_ROUTE}`)
           ? 'direct'
           : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : 'home',
@@ -59,6 +63,8 @@
         ? 'Compare PDFs · Formatter'
         : page === 'share'
         ? 'Share as link or QR · Formatter'
+        : page === 'scan'
+        ? 'Scan to connect · Formatter'
         : page === 'direct'
         ? 'Send between devices · Formatter'
         : page === 'received'
@@ -85,6 +91,7 @@
   <span class="badge" title="Every tool runs inside your browser using WebAssembly. Nothing is uploaded.">
     🔒 Files never leave your device
   </span>
+  <a class="scan" href="#/scan" title="Scan a QR code from your other device to connect or open a shared file">📷 <span>Scan</span></a>
   <button class="icon-btn" onclick={toggleTheme} aria-label="Switch to {theme === 'dark' ? 'light' : 'dark'} theme">
     {theme === 'dark' ? '☀️' : '🌙'}
   </button>
@@ -103,6 +110,8 @@
     <Compare />
   {:else if page === 'share'}
     <Share />
+  {:else if page === 'scan'}
+    <Scan />
   {:else if page === 'direct'}
     {#key hash}
       <Direct {hash} />
@@ -158,6 +167,21 @@
     padding: 4px 10px;
     border-radius: 999px;
   }
+  .scan {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    text-decoration: none;
+  }
+  .scan:hover {
+    border-color: var(--accent);
+  }
   main {
     max-width: 1120px;
     margin: 0 auto;
@@ -175,7 +199,7 @@
     .badge {
       display: none;
     }
-    header .icon-btn {
+    .scan {
       margin-left: auto;
     }
   }

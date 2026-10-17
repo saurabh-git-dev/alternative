@@ -7,8 +7,7 @@
   import type { FileData } from '../../core/types';
   import { decodeFragment } from '../../core/share';
   import { download, formatBytes, toBlob } from '../../core/files';
-  import { parseCsv } from '../../core/text-formats';
-  import { inspectPdf, pdfThumbnails } from '../../core/runner';
+  import FilePreview from '../components/FilePreview.svelte';
   import { ACTIONS } from '../../actions';
   import { accepts } from '../../core/files';
 
@@ -35,44 +34,12 @@
   });
   const isText = $derived(kind === 'csv' || kind === 'json' || kind === 'text');
   const text = $derived(file && isText ? new TextDecoder().decode(file.bytes) : '');
-  const pretty = $derived.by(() => {
-    if (kind !== 'json') return text;
-    try {
-      return JSON.stringify(JSON.parse(text), null, 2);
-    } catch {
-      return text;
-    }
-  });
-  const table = $derived(kind === 'csv' ? parseCsv(text) : []);
   const tools = $derived(file ? ACTIONS.filter((a) => accepts(a, file.type)) : []);
 
-  const url = $derived(file ? URL.createObjectURL(toBlob(file)) : '');
-  $effect(() => {
-    const current = url;
-    return () => current && URL.revokeObjectURL(current);
-  });
-
-  let pages = $state<string[]>([]);
-  let pageCount = $state(0);
-  $effect(() => {
-    if (!file || kind !== 'pdf') return;
-    let alive = true;
-    let made: string[] = [];
-    (async () => {
-      const info = await inspectPdf(file.bytes);
-      if (!alive) return;
-      pageCount = info.pageCount;
-      made = await pdfThumbnails(file.bytes, Array.from({ length: Math.min(3, info.pageCount) }, (_, i) => i + 1), 700);
-      if (alive) pages = made;
-      else made.forEach((u) => URL.revokeObjectURL(u));
-    })().catch(() => {});
-    return () => {
-      alive = false;
-      made.forEach((u) => URL.revokeObjectURL(u));
-    };
-  });
+  let summary = $state('');
 
   const asFile = () => new File([file!.bytes as BlobPart], file!.name, { type: file!.type });
+  const asObject = $derived(file ? asFile() : null);
   const canShareFile = $derived(!!file && typeof navigator.canShare === 'function' && navigator.canShare({ files: [asFile()] }));
 
   let copied = $state(false);
@@ -95,7 +62,7 @@
       <span class="muted small">Shared with you</span>
       <h1 title={file.name}>{file.name}</h1>
       <span class="muted small">
-        {formatBytes(file.bytes.length)}{#if kind === 'pdf' && pageCount}{' · '}{pageCount} page{pageCount > 1 ? 's' : ''}{/if}{#if kind === 'csv'}{' · '}{table.length - 1} rows{/if}
+        {formatBytes(file.bytes.length)}{#if summary}{' · '}{summary}{/if}
       </span>
     </div>
     <div class="actions">
@@ -110,31 +77,7 @@
   </div>
 
   <div class="preview card">
-    {#if kind === 'image'}
-      <img src={url} alt={file.name} />
-    {:else if kind === 'pdf'}
-      {#each pages as page, i (page)}
-        <img class="page" src={page} alt="Page {i + 1}" />
-      {/each}
-      {#if pageCount > pages.length && pages.length}<p class="muted small">…and {pageCount - pages.length} more page{pageCount - pages.length > 1 ? 's' : ''}. <a href={url} target="_blank" rel="noopener">Open the whole PDF</a></p>{/if}
-    {:else if kind === 'csv'}
-      <div class="table">
-        <table><tbody>
-          {#each table.slice(0, 500) as row, r (r)}
-            <tr>
-              {#each row as cell, c (c)}
-                {#if r === 0}<th>{cell}</th>{:else}<td>{cell}</td>{/if}
-              {/each}
-            </tr>
-          {/each}
-        </tbody></table>
-      </div>
-      {#if table.length > 500}<p class="muted small">Showing the first 500 rows. Download for the rest.</p>{/if}
-    {:else if isText}
-      <pre>{pretty}</pre>
-    {:else}
-      <p class="muted">No preview for this kind of file ({file.type}). Download it to open it.</p>
-    {/if}
+    <FilePreview file={asObject!} bind:summary />
   </div>
 
   {#if tools.length}
@@ -198,48 +141,6 @@
     justify-items: center;
     gap: 12px;
     overflow: hidden;
-  }
-  .preview img {
-    max-width: 100%;
-    max-height: 75vh;
-    border-radius: 6px;
-  }
-  .preview .page {
-    box-shadow: var(--shadow);
-    background: white;
-  }
-  pre {
-    justify-self: stretch;
-    margin: 0;
-    padding: 12px;
-    border-radius: var(--radius-sm);
-    background: var(--surface-2);
-    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 70vh;
-    overflow: auto;
-  }
-  .table {
-    justify-self: stretch;
-    overflow: auto;
-    max-height: 70vh;
-  }
-  table {
-    border-collapse: collapse;
-    font-size: 13.5px;
-  }
-  th,
-  td {
-    border: 1px solid var(--border);
-    padding: 5px 9px;
-    text-align: left;
-    white-space: nowrap;
-  }
-  th {
-    background: var(--surface-2);
-    position: sticky;
-    top: 0;
   }
   .more {
     display: flex;
