@@ -1,6 +1,8 @@
 import { defineConfig, type Plugin } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const nodeModules = (path: string) => fileURLToPath(new URL(`./node_modules/${path}`, import.meta.url));
@@ -48,6 +50,50 @@ function vendorFiles(): Plugin {
 }
 
 /**
+ * Writes the service worker (src/pwa/sw.js) to sw.js at the site root, with
+ * the list of files to cache on install. That's everything under 1 MB (pages,
+ * scripts, styles, small engines); bigger engines and the AI models are cached
+ * on first use instead, so the first visit stays light.
+ */
+const PRECACHE_MAX_BYTES = 1024 * 1024;
+
+function serviceWorker(): Plugin {
+  let outDir = 'dist';
+  return {
+    name: 'formatter-service-worker',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+    },
+    closeBundle() {
+      const files: string[] = [];
+      const walk = (dir: string) => {
+        for (const name of readdirSync(dir)) {
+          const path = join(dir, name);
+          if (statSync(path).isDirectory()) walk(path);
+          else files.push(relative(outDir, path).split(sep).join('/'));
+        }
+      };
+      walk(outDir);
+      const hash = createHash('sha256');
+      const precache: string[] = [];
+      for (const file of files.sort()) {
+        const size = statSync(join(outDir, file)).size;
+        hash.update(`${file}:${size}\n`);
+        if (file === 'sw.js' || file.startsWith('vendor/models/') || size > PRECACHE_MAX_BYTES) continue;
+        hash.update(readFileSync(join(outDir, file)));
+        // Pages are cached under the URL people open: video/ rather than video/index.html.
+        precache.push(file === 'index.html' ? './' : file.replace(/(^|\/)index\.html$/, '$1'));
+      }
+      const source = readFileSync(fileURLToPath(new URL('./src/pwa/sw.js', import.meta.url)), 'utf8')
+        .replace("'__VERSION__'", JSON.stringify(hash.digest('hex').slice(0, 12)))
+        .replace('__PRECACHE__', JSON.stringify(precache));
+      writeFileSync(join(outDir, 'sw.js'), source);
+    },
+  };
+}
+
+/**
  * Cross-origin isolation lets WASM engines use threads (SharedArrayBuffer),
  * e.g. multi-threaded oxipng. Any static host should send the same two
  * headers; everything still works single-threaded without them.
@@ -58,7 +104,7 @@ const isolationHeaders = {
 };
 
 export default defineConfig({
-  plugins: [svelte(), vendorFiles()],
+  plugins: [svelte(), vendorFiles(), serviceWorker()],
   resolve: {
     alias: {
       // gs-wasm doesn't export its asset folder; reach it by path so Vite can bundle the files.
