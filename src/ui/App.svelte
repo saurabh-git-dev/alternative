@@ -35,6 +35,7 @@
   import { getAction } from '../actions';
   import { isLive, session } from './transfer.svelte';
   import { loadTheme, saveTheme, type Theme } from './settings';
+  import { canInstall, install } from '../pwa/install.svelte';
 
   let hash = $state(location.hash);
   let theme = $state<Theme>(loadTheme());
@@ -157,6 +158,11 @@
     </a>
   {:else}
     <a class="scan" href="#/scan" title="Scan a QR code from your other device to connect or open a shared file">📷 <span>Scan</span></a>
+  {/if}
+  {#if canInstall()}
+    <button class="install" onclick={install} title="Install Tools as an app. It opens in its own window and works offline.">
+      ⬇️ <span>Install</span>
+    </button>
   {/if}
   <button class="icon-btn" onclick={toggleTheme} aria-label="Switch to {theme === 'dark' ? 'light' : 'dark'} theme">
     {theme === 'dark' ? '☀️' : '🌙'}
@@ -295,6 +301,20 @@
   .scan:hover {
     border-color: var(--accent);
   }
+  .install {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+  }
+  .install:hover {
+    border-color: var(--accent);
+  }
   .scan.live {
     border-color: var(--success);
     color: var(--success);
@@ -345,7 +365,8 @@
       gap: 8px;
     }
     .logo .name,
-    .scan span {
+    .scan span,
+    .install span {
       display: none;
     }
     .sections {
@@ -364,6 +385,9 @@
     }
     .scan {
       margin-left: auto;
+      padding: 5px 9px;
+    }
+    .install {
       padding: 5px 9px;
     }
   }

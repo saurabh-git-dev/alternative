@@ -93,6 +93,15 @@ Cross-Origin-Embedder-Policy: require-corp
 Cloudflare Pages and Netlify support this with a `_headers` file; everything
 still works without them, just single-threaded.
 
+### Installing and offline use
+
+The site is an installable app (PWA). Chrome and Edge show an **Install**
+button in the header; on iPhone and iPad use Share → Add to Home Screen. A
+service worker (`src/pwa/sw.js`, written to `dist/sw.js` by `vite.config.ts`)
+caches the app shell (about 8 MB) on the first visit, so every section opens
+offline. Heavy engines and AI models are cached the first time a tool uses
+them and work offline after that. The icons come from `tools/make-icons.py`.
+
 ## Engines
 
 | Engine | Used for | License | Size |
