@@ -1,32 +1,40 @@
 /**
- * Direct transfer: send files of any size straight from one browser to
- * another (computer ↔ phone), with no upload and no size limit.
+ * Direct transfer: a secure, lasting connection between two browsers
+ * (computer ↔ phone) for sending files of any size, either way, with no
+ * upload and no size limit.
  *
  * How it works:
- * - The device showing the QR code is the *host*. It registers a random,
- *   single-use ID with a public matchmaking server (PeerJS's free cloud
- *   server by default) and waits.
+ * - The device showing the QR code is the *host*. It registers a random ID
+ *   with a public matchmaking server (PeerJS's free cloud server by default)
+ *   and waits.
  * - The QR code holds a link `<app>#/d/<id>.<secret>.<s|r>`. Opening it makes
  *   the other device (the *guest*) ask the matchmaker to introduce it to that
- *   ID. The matchmaker only passes connection details between the two; the
- *   file never touches it, and the secret (in the URL fragment) never leaves
- *   the two devices.
+ *   ID. The matchmaker only passes connection details between the two; files
+ *   never touch it, and the secret (in the URL fragment) never leaves the two
+ *   devices.
  * - The browsers then connect directly over WebRTC. On networks that block
  *   direct connections, traffic goes through PeerJS's free TURN relay, which
  *   only ever sees encrypted bytes.
  * - Before anything is sent, both sides prove they hold the secret and see
  *   the same connection certificates, and every message is sealed with
  *   AES-256-GCM (see core/direct-crypto.ts).
- * - `s` means the host sends (e.g. a file from the computer to the phone);
- *   `r` means the host receives (e.g. photos from the phone to the computer).
+ * - Once connected, either side can send files at any time, as often as it
+ *   likes, until one side ends the session or closes the page. If the
+ *   connection drops (a phone locks its screen, Wi-Fi blips), the guest
+ *   reconnects to the same host with the same secret and fresh keys, so
+ *   nobody has to scan again. Only one guest can be connected at a time.
+ * - `s` / `r` in the link say whether the host started with files to send;
+ *   it only decides which screen the guest opens on.
  *
  * Wire format, after the security check: every message is a sealed frame of
- * `[u8 kind][payload]`; kind 1 is JSON control, kind 2 is file bytes. The
- * sender announces the files, streams each one's bytes in order, then says
- * "done"; the receiver checks the sizes and confirms.
+ * `[u8 kind][payload]`; kind 1 is JSON control, kind 2 is file bytes. A
+ * sender announces a batch (`files`), streams each file's bytes in order,
+ * then says `done`; the receiver checks the sizes and confirms (`got`).
+ * Each side sends one batch at a time, so bytes always belong to the batch
+ * that side announced last; batches in the two directions can overlap.
  */
 import type { DataConnection, Peer, PeerOptions } from 'peerjs';
-import { Channel, authTag, deriveKeys, fromB64url, newSecret, sdpFingerprint, toB64url, verifyTag, type Role } from './direct-crypto';
+import { Channel, authKey, authTag, channelKeys, fromB64url, newNonce, newSecret, sdpFingerprint, toB64url, verifyTag, type Role } from './direct-crypto';
 
 /** Route prefix, without the leading `#`. */
 export const DIRECT_ROUTE = '/d/';
@@ -34,23 +42,45 @@ export const DIRECT_ROUTE = '/d/';
 export interface Invite {
   peerId: string;
   secret: Uint8Array;
-  /** True when the host sends and the guest receives. */
+  /** True when the host started with files to send. */
   hostSends: boolean;
 }
 
-export type Status =
+export type ConnectionState =
   | { state: 'starting' }
-  | { state: 'waiting' }
+  /** Host: registered and waiting for the QR code to be scanned (or for the guest to come back). */
+  | { state: 'waiting'; reconnect: boolean }
   | { state: 'connecting' }
-  | { state: 'secured' }
-  | { state: 'transferring'; direction: 'send' | 'receive'; done: number; total: number; file: string }
-  | { state: 'done'; direction: 'send' | 'receive' }
+  | { state: 'connected' }
+  /** Guest: the connection dropped and it is trying to get back. */
+  | { state: 'reconnecting' }
+  | { state: 'ended'; message: string }
   | { state: 'failed'; message: string };
 
+export interface Progress {
+  id: string;
+  direction: 'send' | 'receive';
+  done: number;
+  total: number;
+  /** File currently going across. */
+  file: string;
+}
+
 export interface Handlers {
-  onStatus: (status: Status) => void;
-  /** Called on the receiving side once every file has arrived intact. */
-  onReceived?: (files: File[]) => void;
+  onState: (state: ConnectionState) => void;
+  onProgress?: (progress: Progress) => void;
+  /** A batch arrived intact. */
+  onReceived?: (id: string, files: File[]) => void;
+  /** The other side confirmed a batch this side sent. */
+  onSent?: (id: string) => void;
+  /** A batch stopped part-way (the connection dropped). */
+  onAborted?: (id: string, direction: 'send' | 'receive') => void;
+}
+
+interface FileMeta {
+  name: string;
+  type: string;
+  size: number;
 }
 
 const KIND_JSON = 1;
@@ -60,6 +90,9 @@ const CHUNK = 64 * 1024;
 const HIGH_WATER = 4 * 1024 * 1024;
 const LOW_WATER = 1024 * 1024;
 const CONNECT_TIMEOUT_MS = 25_000;
+/** How long a guest keeps trying to get back after the connection drops. */
+const RECONNECT_FOR_MS = 3 * 60_000;
+const RECONNECT_EVERY_MS = 4_000;
 
 const SERVER_SETTING = 'formatter-peer-server';
 
@@ -100,6 +133,8 @@ function explain(error: unknown): string {
   switch (type) {
     case 'peer-unavailable':
       return 'The other device is no longer waiting. Make a new QR code and scan it again.';
+    case 'unavailable-id':
+      return 'This QR code is already in use in another tab. Make a new one.';
     case 'browser-incompatible':
       return "This browser can't make direct connections. Try an up-to-date Chrome, Safari, Edge or Firefox.";
     case 'network':
@@ -112,30 +147,39 @@ function explain(error: unknown): string {
   }
 }
 
+/** One connection attempt: handshake, encryption and the batches sent over it. */
+interface Link {
+  conn: DataConnection;
+  channel: Channel | null;
+  secured: boolean;
+  nonce: string;
+  fingerprints: { own: string; peer: string } | null;
+  /** Opens incoming frames one at a time, in arrival order. */
+  inbox: Promise<void>;
+  incoming: { id: string; list: FileMeta[]; index: number; parts: Uint8Array[]; got: number; files: File[] } | null;
+  confirm: Map<string, () => void>;
+}
+
 export class DirectTransfer {
   private peer: Peer | null = null;
-  private conn: DataConnection | null = null;
-  private channel: Channel | null = null;
-  private secured = false;
-  private finished = false;
+  private link: Link | null = null;
+  private ended = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
-  /** Incoming frames are opened one at a time, in arrival order. */
-  private inbox: Promise<void> = Promise.resolve();
-  private incoming: { list: { name: string; type: string; size: number }[]; index: number; parts: Uint8Array[]; got: number; files: File[] } | null = null;
-  private resolveSent: (() => void) | null = null;
+  private reconnectUntil = 0;
+  private auth: Promise<CryptoKey>;
+  /** Batches waiting to go out, sent one after another. */
+  private outbox: { id: string; files: File[] }[] = [];
+  private sending = false;
 
   private constructor(
     readonly invite: Invite,
     readonly role: Role,
     private handlers: Handlers,
-  ) {}
-
-  /** Whether this side sends the files. */
-  get sends(): boolean {
-    return this.invite.hostSends === (this.role === 'host');
+  ) {
+    this.auth = authKey(invite.secret);
   }
 
-  /** Start waiting for a guest. Show `inviteLink(…, transfer.invite)` as a QR code once the status is `waiting`. */
+  /** Start waiting for a guest. Show `inviteLink(…, transfer.invite)` as a QR code once the state is `waiting`. */
   static host(hostSends: boolean, handlers: Handlers): DirectTransfer {
     const transfer = new DirectTransfer({ peerId: newPeerId(), secret: newSecret(), hostSends }, 'host', handlers);
     transfer.start();
@@ -149,34 +193,46 @@ export class DirectTransfer {
     return transfer;
   }
 
-  private status(s: Status) {
-    if (!this.finished || s.state === 'done' || s.state === 'failed') this.handlers.onStatus(s);
+  get connected(): boolean {
+    return !!this.link?.secured;
+  }
+
+  private state(s: ConnectionState) {
+    if (!this.ended || s.state === 'ended' || s.state === 'failed') this.handlers.onState(s);
   }
 
   private fail(message: string) {
-    if (this.finished) return;
-    this.status({ state: 'failed', message });
-    this.finished = true;
-    this.close();
+    if (this.ended) return;
+    this.state({ state: 'failed', message });
+    this.shutdown();
   }
 
   private async start() {
-    this.status({ state: 'starting' });
+    this.state({ state: 'starting' });
     try {
       const { Peer } = await import('peerjs');
       const peer = this.role === 'host' ? new Peer(this.invite.peerId, peerOptions()) : new Peer(peerOptions());
       this.peer = peer;
-      peer.on('error', (e) => this.fail(explain(e)));
+      peer.on('error', (e) => {
+        // A guest retrying after a drop sees "unavailable" while the host is briefly away; keep trying.
+        if (this.role === 'guest' && Date.now() < this.reconnectUntil && (e as { type?: string }).type === 'peer-unavailable') {
+          if (this.link) this.lost(this.link);
+          return;
+        }
+        this.fail(explain(e));
+      });
+      // Phones drop the matchmaker's socket when the page is in the background; rejoin quietly.
+      peer.on('disconnected', () => !this.ended && !peer.destroyed && peer.reconnect());
       peer.on('open', () => {
         if (this.role === 'host') {
-          this.status({ state: 'waiting' });
+          this.state({ state: 'waiting', reconnect: false });
           peer.on('connection', (conn) => {
-            // One guest per invite; anyone else is turned away.
-            if (this.conn) conn.close();
+            // One guest at a time; anyone else is turned away.
+            if (this.link) conn.close();
             else this.attach(conn);
           });
-        } else {
-          this.attach(peer.connect(this.invite.peerId, { reliable: true, serialization: 'raw' }));
+        } else if (!this.link) {
+          this.dial();
         }
       });
     } catch (e) {
@@ -184,147 +240,248 @@ export class DirectTransfer {
     }
   }
 
+  private dial() {
+    // While the matchmaker socket is down, the peer's 'open' event dials once it is back.
+    if (this.ended || this.link || !this.peer || this.peer.disconnected) return;
+    this.attach(this.peer.connect(this.invite.peerId, { reliable: true, serialization: 'raw' }));
+  }
+
   private attach(conn: DataConnection) {
-    this.conn = conn;
-    this.status({ state: 'connecting' });
-    this.timer = setTimeout(
-      () => this.fail("The devices couldn't connect. Make sure both are online (the same Wi-Fi works best) and try again."),
-      CONNECT_TIMEOUT_MS,
-    );
-    conn.on('open', () => this.handshake().catch((e) => this.fail(explain(e))));
+    const link: Link = { conn, channel: null, secured: false, nonce: newNonce(), fingerprints: null, inbox: Promise.resolve(), incoming: null, confirm: new Map() };
+    this.link = link;
+    if (Date.now() >= this.reconnectUntil) this.state({ state: 'connecting' });
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.lost(link, true), CONNECT_TIMEOUT_MS);
+    conn.on('open', () => this.handshake(link).catch((e) => this.drop(link, explain(e))));
     conn.on('data', (data) => {
-      this.inbox = this.inbox.then(() => this.onData(data)).catch((e) => this.fail(explain(e)));
+      link.inbox = link.inbox.then(() => this.onData(link, data)).catch((e) => this.drop(link, explain(e)));
     });
-    conn.on('close', () => {
-      if (!this.finished) this.fail('The other device disconnected before the transfer finished.');
+    conn.on('close', () => this.lost(link));
+    conn.on('error', () => this.lost(link));
+    // PeerJS doesn't always notice a dead connection; the browser does.
+    conn.peerConnection?.addEventListener('connectionstatechange', () => {
+      const s = conn.peerConnection?.connectionState;
+      if (s === 'failed' || s === 'closed') this.lost(link);
     });
-    conn.on('error', (e) => this.fail(explain(e)));
   }
 
-  private keys: Awaited<ReturnType<typeof deriveKeys>> | null = null;
-  private fingerprints: { own: string; peer: string } | null = null;
-
-  private async handshake() {
-    const pc = this.conn!.peerConnection;
-    this.fingerprints = { own: sdpFingerprint(pc.localDescription?.sdp), peer: sdpFingerprint(pc.remoteDescription?.sdp) };
-    this.keys = await deriveKeys(this.invite.secret, this.role);
-    this.channel = new Channel(this.keys);
-    const tag = await authTag(this.keys, this.role, this.fingerprints.own, this.fingerprints.peer);
-    this.conn!.send(JSON.stringify({ t: 'auth', tag }));
+  /** A security problem: stop for good, nothing more is sent. */
+  private drop(link: Link, message: string) {
+    if (this.link === link) this.fail(message);
   }
 
-  private async onData(data: unknown) {
-    if (!this.secured) {
+  /** The connection went away (or never came up): wait for a reconnect, or give up. */
+  private lost(link: Link, timedOut = false) {
+    if (this.link !== link || this.ended) return;
+    this.link = null;
+    clearTimeout(this.timer);
+    link.conn.close();
+    if (link.incoming) this.handlers.onAborted?.(link.incoming.id, 'receive');
+    for (const id of link.confirm.keys()) this.handlers.onAborted?.(id, 'send');
+    link.confirm.clear();
+    const wasConnected = link.secured;
+    if (this.role === 'host') {
+      // The same QR code stays valid, so the guest can come back.
+      this.state({ state: 'waiting', reconnect: wasConnected });
+      return;
+    }
+    if (wasConnected) this.reconnectUntil = Date.now() + RECONNECT_FOR_MS;
+    if (Date.now() < this.reconnectUntil) {
+      this.state({ state: 'reconnecting' });
+      this.timer = setTimeout(() => this.dial(), RECONNECT_EVERY_MS);
+    } else {
+      this.fail(
+        timedOut
+          ? "The devices couldn't connect. Make sure both are online (the same Wi-Fi works best) and try again."
+          : 'The connection to the other device was lost. Scan the QR code again to reconnect.',
+      );
+    }
+  }
+
+  private async handshake(link: Link) {
+    const pc = link.conn.peerConnection;
+    link.fingerprints = { own: sdpFingerprint(pc.localDescription?.sdp), peer: sdpFingerprint(pc.remoteDescription?.sdp) };
+    const tag = await authTag(await this.auth, this.role, link.fingerprints.own, link.fingerprints.peer, link.nonce);
+    link.conn.send(JSON.stringify({ t: 'auth', nonce: link.nonce, tag }));
+  }
+
+  private async onData(link: Link, data: unknown) {
+    if (this.link !== link) return;
+    if (!link.secured) {
       // The only message accepted before the check passes is the other side's tag.
       const message = typeof data === 'string' ? JSON.parse(data) : null;
-      if (message?.t !== 'auth' || !this.keys || !this.fingerprints) throw new Error('The other device sent something unexpected, so the connection was closed.');
+      if (message?.t !== 'auth' || typeof message.nonce !== 'string' || !link.fingerprints) {
+        throw new Error('The other device sent something unexpected, so the connection was closed.');
+      }
       const peerRole: Role = this.role === 'host' ? 'guest' : 'host';
-      const ok = await verifyTag(this.keys, peerRole, this.fingerprints.own, this.fingerprints.peer, message.tag);
+      const ok = await verifyTag(await this.auth, peerRole, link.fingerprints.own, link.fingerprints.peer, message.nonce, message.tag);
       if (!ok) throw new Error("The security check failed: this isn't the device that scanned or showed your QR code. Nothing was sent.");
+      const [hostNonce, guestNonce] = this.role === 'host' ? [link.nonce, message.nonce] : [message.nonce, link.nonce];
+      link.channel = new Channel(await channelKeys(this.invite.secret, this.role, hostNonce, guestNonce));
       clearTimeout(this.timer);
-      this.secured = true;
-      this.status({ state: 'secured' });
+      this.reconnectUntil = 0;
+      link.secured = true;
+      this.state({ state: 'connected' });
+      this.pump();
       return;
     }
     if (!(data instanceof ArrayBuffer)) throw new Error('The other device sent something unexpected, so the connection was closed.');
-    const frame = await this.channel!.open(data);
+    const frame = await link.channel!.open(data);
     const body = frame.subarray(1);
-    if (frame[0] === KIND_JSON) await this.onControl(JSON.parse(new TextDecoder().decode(body)));
-    else if (frame[0] === KIND_DATA) this.onChunk(body);
+    if (frame[0] === KIND_JSON) await this.onControl(link, JSON.parse(new TextDecoder().decode(body)));
+    else if (frame[0] === KIND_DATA) this.onChunk(link, body);
   }
 
-  private async onControl(message: { t: string; files?: { name: string; type: string; size: number }[] }) {
-    if (message.t === 'files' && !this.sends && message.files) {
-      this.incoming = { list: message.files, index: 0, parts: [], got: 0, files: [] };
-      this.nextIncoming();
-    } else if (message.t === 'done' && this.incoming) {
-      const { list, files } = this.incoming;
-      if (files.length !== list.length) throw new Error('Some files arrived incomplete. Try again.');
-      await this.sendJson({ t: 'got' });
-      this.finished = true;
-      this.status({ state: 'done', direction: 'receive' });
-      this.handlers.onReceived?.(files);
-      setTimeout(() => this.close(), 1000);
-    } else if (message.t === 'got' && this.sends) {
-      this.resolveSent?.();
+  private async onControl(link: Link, message: { t: string; id?: string; files?: FileMeta[] }) {
+    const id = String(message.id ?? '');
+    if (message.t === 'files' && Array.isArray(message.files)) {
+      if (link.incoming) this.handlers.onAborted?.(link.incoming.id, 'receive');
+      link.incoming = { id, list: message.files, index: 0, parts: [], got: 0, files: [] };
+      this.advance(link);
+    } else if (message.t === 'done' && link.incoming?.id === id) {
+      const { list, files } = link.incoming;
+      link.incoming = null;
+      if (files.length !== list.length) throw new Error('Some files arrived incomplete, so the connection was closed.');
+      await this.sendJson(link, { t: 'got', id });
+      this.handlers.onReceived?.(id, files);
+    } else if (message.t === 'got') {
+      link.confirm.get(id)?.();
+    } else if (message.t === 'bye') {
+      this.state({ state: 'ended', message: 'The other device ended the session.' });
+      this.shutdown();
     }
   }
 
   /** Finish files that are complete (including empty ones) and report progress. */
-  private nextIncoming() {
-    const inc = this.incoming!;
+  private advance(link: Link) {
+    const inc = link.incoming!;
     for (;;) {
       const meta = inc.list[inc.index];
-      if (!meta) return;
+      if (!meta) break;
       const size = inc.parts.reduce((n, p) => n + p.length, 0);
       if (size < meta.size) break;
-      if (size > meta.size) throw new Error('A file arrived larger than announced, so the transfer was stopped.');
+      if (size > meta.size) throw new Error('A file arrived larger than announced, so the connection was closed.');
       inc.files.push(new File(inc.parts as BlobPart[], meta.name, { type: meta.type }));
       inc.parts = [];
       inc.index++;
     }
     const total = inc.list.reduce((n, f) => n + f.size, 0);
-    this.status({ state: 'transferring', direction: 'receive', done: inc.got, total, file: inc.list[inc.index]?.name ?? '' });
+    this.handlers.onProgress?.({ id: inc.id, direction: 'receive', done: inc.got, total, file: inc.list[inc.index]?.name ?? '' });
   }
 
-  private onChunk(bytes: Uint8Array) {
-    if (!this.incoming) throw new Error('The other device sent data before saying what it was.');
-    this.incoming.parts.push(bytes.slice());
-    this.incoming.got += bytes.length;
-    this.nextIncoming();
+  private onChunk(link: Link, bytes: Uint8Array) {
+    if (!link.incoming) throw new Error('The other device sent data before saying what it was.');
+    link.incoming.parts.push(bytes.slice());
+    link.incoming.got += bytes.length;
+    this.advance(link);
   }
 
-  private async sendFrame(kind: number, payload: Uint8Array) {
+  private async sendFrame(link: Link, kind: number, payload: Uint8Array) {
     const plain = new Uint8Array(payload.length + 1);
     plain[0] = kind;
     plain.set(payload, 1);
-    const sealed = await this.channel!.seal(plain);
-    const dc = this.conn!.dataChannel;
-    if (dc.bufferedAmount > HIGH_WATER) {
+    const sealed = await link.channel!.seal(plain);
+    const dc = link.conn.dataChannel;
+    while (dc.readyState === 'open' && dc.bufferedAmount > HIGH_WATER) {
       dc.bufferedAmountLowThreshold = LOW_WATER;
-      await new Promise<void>((resolve) => dc.addEventListener('bufferedamountlow', () => resolve(), { once: true }));
+      await new Promise<void>((resolve) => {
+        dc.addEventListener('bufferedamountlow', () => resolve(), { once: true });
+        dc.addEventListener('close', () => resolve(), { once: true });
+      });
     }
-    if (this.finished || dc.readyState !== 'open') throw new Error('The other device disconnected before the transfer finished.');
+    if (this.link !== link || dc.readyState !== 'open') throw new Error('disconnected');
     dc.send(sealed);
   }
 
-  private sendJson(message: object) {
-    return this.sendFrame(KIND_JSON, new TextEncoder().encode(JSON.stringify(message)));
+  private sendJson(link: Link, message: object) {
+    return this.sendFrame(link, KIND_JSON, new TextEncoder().encode(JSON.stringify(message)));
   }
 
-  /** Send files to the other device. Call once the status is `secured`, on the sending side. */
-  async send(files: File[]): Promise<void> {
-    if (!this.secured || !this.sends) throw new Error('Not ready to send yet.');
-    const total = files.reduce((n, f) => n + f.size, 0);
-    let done = 0;
+  /**
+   * Queue files to send to the other device. They go out as soon as the
+   * devices are connected, after any batches queued earlier. Returns the
+   * batch id used in progress, `onSent` and `onAborted`.
+   */
+  send(files: File[]): string {
+    const id = crypto.randomUUID();
+    this.outbox.push({ id, files });
+    this.pump();
+    return id;
+  }
+
+  private async pump() {
+    if (this.sending) return;
+    this.sending = true;
     try {
-      await this.sendJson({ t: 'files', files: files.map((f) => ({ name: f.name, type: f.type || 'application/octet-stream', size: f.size })) });
-      for (const file of files) {
-        for (let offset = 0; offset < file.size; offset += CHUNK) {
-          const bytes = new Uint8Array(await file.slice(offset, offset + CHUNK).arrayBuffer());
-          await this.sendFrame(KIND_DATA, bytes);
-          done += bytes.length;
-          this.status({ state: 'transferring', direction: 'send', done, total, file: file.name });
+      while (this.outbox.length && this.link?.secured && !this.ended) {
+        const link = this.link;
+        const { id, files } = this.outbox[0];
+        try {
+          await this.sendBatch(link, id, files);
+          this.outbox.shift();
+          this.handlers.onSent?.(id);
+        } catch {
+          // The connection dropped mid-batch: `lost` reported it; the batch stays queued and restarts on reconnect.
+          if (this.link === link) this.lost(link);
+          break;
         }
       }
-      const confirmed = new Promise<void>((resolve) => (this.resolveSent = resolve));
-      await this.sendJson({ t: 'done' });
-      await confirmed;
-      this.finished = true;
-      this.status({ state: 'done', direction: 'send' });
-      setTimeout(() => this.close(), 1000);
-    } catch (e) {
-      this.fail(explain(e));
+    } finally {
+      this.sending = false;
     }
   }
 
-  /** Stop and disconnect; the invite can't be used again. */
-  close() {
+  private async sendBatch(link: Link, id: string, files: File[]) {
+    const total = files.reduce((n, f) => n + f.size, 0);
+    let done = 0;
+    const meta = files.map((f) => ({ name: f.name, type: f.type || 'application/octet-stream', size: f.size }));
+    await this.sendJson(link, { t: 'files', id, files: meta });
+    this.handlers.onProgress?.({ id, direction: 'send', done, total, file: files[0]?.name ?? '' });
+    for (const file of files) {
+      for (let offset = 0; offset < file.size; offset += CHUNK) {
+        const bytes = new Uint8Array(await file.slice(offset, offset + CHUNK).arrayBuffer());
+        await this.sendFrame(link, KIND_DATA, bytes);
+        done += bytes.length;
+        this.handlers.onProgress?.({ id, direction: 'send', done, total, file: file.name });
+      }
+    }
+    const confirmed = new Promise<void>((resolve, reject) => {
+      link.confirm.set(id, resolve);
+      link.conn.on('close', () => reject(new Error('disconnected')));
+    });
+    await this.sendJson(link, { t: 'done', id });
+    await confirmed;
+    link.confirm.delete(id);
+  }
+
+  /** End the session for both devices; the QR code stops working. */
+  async end() {
+    const link = this.link;
+    if (link?.secured) await this.sendJson(link, { t: 'bye' }).catch(() => {});
+    this.state({ state: 'ended', message: 'Session ended.' });
+    setTimeout(() => this.shutdown(), 200);
+  }
+
+  /** Disconnect without telling the other side (e.g. leaving the page). */
+  shutdown() {
     clearTimeout(this.timer);
-    this.finished = true;
-    this.conn?.close();
+    this.ended = true;
+    this.outbox = [];
+    this.link?.conn.close();
+    this.link = null;
     this.peer?.destroy();
-    this.conn = null;
     this.peer = null;
   }
+}
+
+/** Routes a scanned code can open inside the app. */
+const SCANNABLE = /#\/(d|s|q)\/.+$/;
+
+/**
+ * The app route for text read from a QR code: a connection invite or a share
+ * link, from this site or any copy of it. Null for anything else.
+ */
+export function routeFromScan(text: string): string | null {
+  const match = text.trim().match(SCANNABLE);
+  return match ? match[0] : null;
 }

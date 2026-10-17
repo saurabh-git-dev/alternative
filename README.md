@@ -14,7 +14,7 @@ your device with WebAssembly engines and are never uploaded.
 | PDF security | Protect (AES-256), Unlock, Redact (true removal), Digitally sign (certificate, .p12/.pfx) |
 | Images | Compress, Resize, Crop, Remove background (AI), Upscale 2–4× (AI), Convert, Photo editor, Rotate, Watermark, Remove photo info, Image → text (OCR) |
 | Automate | Pipelines: chain tools and run them in one go, with ready-made recipes |
-| Share | Share as link or QR code: any small file, or pasted text, CSV or JSON, packed into the link itself. Send to / get files from your phone: any size, straight between devices, end-to-end encrypted |
+| Share | Share as link or QR code: any small file, or pasted text, CSV or JSON, packed into the link itself. Send to / get files from your phone: any size, either way, over a lasting end-to-end encrypted connection, with previews and an in-app QR scanner |
 
 Every tool opens with recommended settings. Presets cover the common cases,
 and an **Advanced settings** drawer exposes every parameter. Your last-used
