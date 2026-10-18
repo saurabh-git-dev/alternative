@@ -18,7 +18,7 @@ both sections, and the header links each section to the other.
 | `#/` | IT home (`src/ui/it/ItHome.svelte`) |
 | `#/<tool id>` | a tool (`src/ui/it/ItTool.svelte`) |
 | `#/<tool id>/<state>` | a tool opened with input and options from a link (`src/it/links.ts`) |
-| `#/share`, `#/direct`, `#/scan`, `#/s/…` … | the shared pages, as in the main section |
+| `#/share`, `#/connect`, `#/s/…` … | the shared pages, as in the main section |
 
 ## Folders
 
@@ -35,11 +35,11 @@ both sections, and the header links each section to the other.
 
 Where sharing helps, it's built in rather than bolted on:
 
-- **Every output** has Copy, Save and Share. Share sends small outputs to the
-  Share page as a QR code your phone can scan (a password, a UUID, a JWT
-  payload, a Wi-Fi QR), and bigger ones over the direct, end-to-end
-  encrypted connection. The choice is by size, as for PDF and image results
-  (`src/ui/share-target.ts`).
+- **Every output** has Copy, Save and Share. Share is the app-wide menu
+  (`src/ui/components/ShareMenu.svelte`): a connected device gets the text
+  as a chat message it can copy; "Someone else" connects a new device by QR
+  code; small outputs can also go as a QR code and link (a password, a UUID,
+  a JWT payload, a Wi-Fi QR).
 - **Copy link to this** packs a transform's input and options into the link
   itself (deflate + base64url in the fragment), so a colleague opens the same
   tool with the same JSON, cron line or URL. Tools whose input may be secret

@@ -1,7 +1,7 @@
 <!--
-  Scan to connect: reads a QR code with the device camera, inside the app,
-  and opens it. Works for connection codes (Send to / Get files from your
-  phone) and share-link codes. Uses the browser's built-in BarcodeDetector
+  QR scanner (the Connect page's "Scan a code" tab): reads a QR code with the
+  device camera, inside the app, and opens it. Works for connection codes
+  and share-link codes. Uses the browser's built-in BarcodeDetector
   where it exists (Chrome on Android) and the jsQR decoder elsewhere (iOS
   Safari, Firefox). A photo or screenshot of a code works too.
 -->
@@ -107,16 +107,7 @@
   }
 </script>
 
-<a class="back" href="#/">← All tools</a>
-<div class="head">
-  <span class="icon" aria-hidden="true">📷</span>
-  <div>
-    <h1>Scan to connect</h1>
-    <p class="muted">Point your camera at the QR code on your other device.</p>
-  </div>
-</div>
-
-<div class="card box">
+<div class="scanner">
   <div class="viewer" class:live={status === 'scanning'}>
     <!-- svelte-ignore a11y_media_has_caption -->
     <video bind:this={video} playsinline muted></video>
@@ -140,44 +131,15 @@
     <button class="btn" onclick={() => picker.click()}>🖼️ Scan from a photo</button>
   </div>
   <p class="muted small">
-    To get a code: on your other device open <strong>Send to your phone</strong> or <strong>Get files from your phone</strong>. Scanning stays on this device; nothing is uploaded.
+    To get a code, open <strong>Connect</strong> at the top of this site on your other device. Scanning stays on this device; nothing is uploaded.
   </p>
 </div>
 
 <style>
-  .back {
-    display: inline-block;
-    margin-bottom: 12px;
-    text-decoration: none;
-    font-size: 14px;
-  }
-  .head {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    margin-bottom: 20px;
-  }
-  .head .icon {
-    flex: none;
-    font-size: 28px;
-    width: 52px;
-    height: 52px;
-    display: grid;
-    place-items: center;
-    border-radius: 14px;
-    background: var(--accent-soft);
-  }
-  h1 {
-    margin: 0;
-    font-size: 24px;
-  }
-  .head p {
-    margin: 2px 0 0;
-  }
-  .box {
-    max-width: 560px;
+  .scanner {
+    max-width: 480px;
     margin: 0 auto;
-    padding: 16px;
+    width: 100%;
     display: grid;
     gap: 12px;
   }
@@ -225,13 +187,5 @@
   }
   .small {
     font-size: 13px;
-  }
-  @media (max-width: 560px) {
-    .head p {
-      display: none;
-    }
-    h1 {
-      font-size: 21px;
-    }
   }
 </style>

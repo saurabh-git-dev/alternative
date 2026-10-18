@@ -1,0 +1,361 @@
+/**
+ * Connected devices: every direct-transfer session of this tab (see
+ * core/direct.ts), one per device, with a chat-style history of the files and
+ * text sent each way. Kept outside any page, so connections stay open while
+ * you use the tools; the header's Connect button shows how many are live.
+ *
+ * - A session closes after 5 minutes without anything sent or received
+ *   (`IDLE_MS`), on both devices. A QR code nobody scans expires the same way.
+ * - Sessions survive a reload or a switch to another section (a different
+ *   page of the same site): the invite is kept in sessionStorage (this tab
+ *   only, gone when it closes) and both sides reconnect by themselves. Chat
+ *   text is kept with it; files are kept in IndexedDB (connect/history-db.ts)
+ *   until the session ends.
+ */
+import { DirectTransfer, type ConnectionState, type Invite, type Progress } from '../../core/direct';
+import { fromB64url, toB64url } from '../../core/direct-crypto';
+import { deviceName } from '../../core/device';
+import * as history from './history-db';
+
+export const IDLE_MS = 5 * 60_000;
+const SAVE_KEY = 'tools-connect';
+
+export interface FileInfo {
+  name: string;
+  type: string;
+  size: number;
+}
+
+export interface Message {
+  id: string;
+  dir: 'in' | 'out';
+  at: number;
+  kind: 'text' | 'files';
+  text?: string;
+  /** The files, once they are here (received, or loaded back after a reload). */
+  files: File[];
+  meta: FileInfo[];
+  done: number;
+  total: number;
+  status: 'queued' | 'active' | 'complete' | 'interrupted';
+  /** Name of the file going across right now. */
+  current: string;
+}
+
+export interface Device {
+  /** Local id of this session. */
+  key: string;
+  transfer: DirectTransfer;
+  conn: ConnectionState;
+  /** The other device's name, once it has said it. */
+  name: string;
+  /** Has connected at least once. A host that hasn't is a QR code waiting to be scanned. */
+  paired: boolean;
+  messages: Message[];
+  unread: number;
+  /** Last time anything was sent or received (or the session started). */
+  lastActive: number;
+}
+
+export const hub = $state<{
+  devices: Device[];
+  /** The device whose chat is on screen; its messages don't count as unread. */
+  viewing: string | null;
+  /** The latest arrival (or a send started from a Share menu), for the corner notice. */
+  notice: { device: string; message: string } | null;
+  /** Ticks every second, for countdowns. */
+  now: number;
+}>({ devices: [], viewing: null, notice: null, now: Date.now() });
+
+const myName = deviceName();
+
+export const isLive = (d: Device) => d.conn.state !== 'ended' && d.conn.state !== 'failed';
+
+/** Devices to list: connected now or before (with their history), and guests on their way in. */
+export function listedDevices(): Device[] {
+  return hub.devices.filter((d) => d.paired || d.transfer.role === 'guest');
+}
+
+/** Devices files can be sent to: paired and not ended (they may be reconnecting). */
+export function liveDevices(): Device[] {
+  return hub.devices.filter((d) => d.paired && isLive(d));
+}
+
+export function connectedCount(): number {
+  return hub.devices.filter((d) => d.conn.state === 'connected').length;
+}
+
+/** The QR code currently offered to a new device, if any. */
+export function pendingHost(): Device | undefined {
+  return hub.devices.find((d) => !d.paired && d.transfer.role === 'host' && isLive(d));
+}
+
+export function getDevice(key: string): Device | undefined {
+  return hub.devices.find((d) => d.key === key);
+}
+
+/** Seconds left before an idle session closes. */
+export function secondsLeft(d: Device): number {
+  return Math.max(0, Math.ceil((d.lastActive + IDLE_MS - hub.now) / 1000));
+}
+
+export function displayName(d: Device): string {
+  if (d.name) return d.name;
+  return d.transfer.role === 'host' ? 'Device that scanned your code' : 'Device that showed the code';
+}
+
+function touch(d: Device) {
+  d.lastActive = Date.now();
+}
+
+function fileInfo(files: File[]): FileInfo[] {
+  return files.map((f) => ({ name: f.name, type: f.type, size: f.size }));
+}
+
+function arrived(d: Device, m: Message) {
+  touch(d);
+  if (hub.viewing !== d.key || document.hidden) d.unread++;
+  hub.notice = { device: d.key, message: m.id };
+}
+
+function handlersFor(key: string) {
+  const find = () => getDevice(key);
+  const message = (id: string) => find()?.messages.find((m) => m.id === id);
+  return {
+    onState: (s: ConnectionState) => {
+      const d = find();
+      if (!d) return;
+      d.conn = s;
+      if (s.state === 'connected' && !d.paired) {
+        d.paired = true;
+        touch(d);
+      }
+      if (!isLive(d)) {
+        for (const m of d.messages) if (m.status === 'queued' || m.status === 'active') m.status = 'interrupted';
+        history.deleteDevice(d.key);
+      }
+      save();
+    },
+    onProgress: (p: Progress) => {
+      const d = find();
+      if (!d) return;
+      let m = message(p.id);
+      if (!m) {
+        d.messages.push({ id: p.id, dir: 'in', at: Date.now(), kind: 'files', files: [], meta: [], done: 0, total: p.total, status: 'active', current: p.file });
+        m = d.messages.at(-1)!;
+      }
+      m.status = 'active';
+      m.done = p.done;
+      m.total = p.total;
+      m.current = p.file;
+      touch(d);
+    },
+    onReceived: (id: string, files: File[]) => {
+      const d = find();
+      const m = message(id);
+      if (!d || !m) return;
+      m.files = files;
+      m.meta = fileInfo(files);
+      m.status = 'complete';
+      m.done = m.total;
+      arrived(d, m);
+      history.saveFiles(d.key, id, files);
+      save();
+    },
+    onSent: (id: string) => {
+      const d = find();
+      const m = message(id);
+      if (!d || !m) return;
+      m.status = 'complete';
+      m.done = m.total;
+      touch(d);
+      save();
+    },
+    onAborted: (id: string, direction: 'send' | 'receive') => {
+      const m = message(id);
+      if (!m) return;
+      // Sends stay queued and restart on reconnect; partial receives are dropped.
+      m.status = direction === 'send' ? 'queued' : 'interrupted';
+      if (direction === 'send') m.done = 0;
+    },
+    onHello: (name: string) => {
+      const d = find();
+      if (!d) return;
+      d.name = name;
+      save();
+    },
+    onText: (id: string, text: string, at: number) => {
+      const d = find();
+      if (!d || d.messages.some((m) => m.id === id)) return;
+      d.messages.push({ id, dir: 'in', at, kind: 'text', text, files: [], meta: [], done: 0, total: 0, status: 'complete', current: '' });
+      arrived(d, d.messages.at(-1)!);
+      save();
+    },
+  };
+}
+
+function add(make: (key: string) => DirectTransfer, init: Partial<Device> = {}): Device {
+  const key = init.key ?? crypto.randomUUID();
+  // Its first state change ('starting') arrives before it is listed, which matches the initial state.
+  const transfer = make(key);
+  hub.devices.push({ conn: { state: 'starting' }, name: '', paired: false, messages: [], unread: 0, lastActive: Date.now(), ...init, key, transfer });
+  return hub.devices.at(-1)!;
+}
+
+/**
+ * A QR code for a new device to scan. Reuses the one already on offer. Files
+ * given here are sent as soon as that device connects.
+ */
+export function newHost(files: File[] = []): Device {
+  const d = pendingHost() ?? add((key) => DirectTransfer.host(files.length > 0, handlersFor(key), { name: myName }));
+  if (files.length) sendFiles(d.key, files);
+  return d;
+}
+
+/** Connect to the device that showed this invite (or return that session if it is already open). */
+export function join(invite: Invite): Device {
+  const existing = hub.devices.find((d) => d.transfer.invite.peerId === invite.peerId && isLive(d));
+  return existing ?? add((key) => DirectTransfer.join(invite, handlersFor(key), { name: myName }));
+}
+
+export function sendFiles(key: string, files: File[]): string | undefined {
+  const d = getDevice(key);
+  if (!d || !files.length || !isLive(d)) return;
+  const id = d.transfer.send(files);
+  const total = files.reduce((n, f) => n + f.size, 0);
+  d.messages.push({ id, dir: 'out', at: Date.now(), kind: 'files', files, meta: fileInfo(files), done: 0, total, status: 'queued', current: files[0].name });
+  touch(d);
+  history.saveFiles(d.key, id, files);
+  save();
+  return id;
+}
+
+export function sendText(key: string, text: string): string | undefined {
+  const d = getDevice(key);
+  if (!d || !text.trim() || !isLive(d)) return;
+  const id = d.transfer.sendText(text);
+  d.messages.push({ id, dir: 'out', at: Date.now(), kind: 'text', text, files: [], meta: [], done: 0, total: 0, status: 'queued', current: '' });
+  touch(d);
+  save();
+  return id;
+}
+
+/** Send files from an interrupted message again. */
+export function resend(key: string, message: Message) {
+  if (message.files.length) sendFiles(key, message.files);
+}
+
+export function endDevice(key: string) {
+  getDevice(key)?.transfer.end();
+}
+
+/** Remove an ended session and its history. */
+export function forget(key: string) {
+  const d = getDevice(key);
+  if (!d) return;
+  if (isLive(d)) d.transfer.shutdown();
+  hub.devices = hub.devices.filter((x) => x.key !== key);
+  if (hub.notice?.device === key) hub.notice = null;
+  history.deleteDevice(key);
+  save();
+}
+
+export function markRead(key: string) {
+  const d = getDevice(key);
+  if (d) d.unread = 0;
+}
+
+// --- Keeping sessions across reloads ---------------------------------------
+
+interface Saved {
+  key: string;
+  role: 'host' | 'guest';
+  peerId: string;
+  secret: string;
+  name: string;
+  lastActive: number;
+  messages: Omit<Message, 'files' | 'current' | 'done'>[];
+}
+
+function save() {
+  if (typeof sessionStorage === 'undefined') return;
+  const saved: Saved[] = liveDevices().map((d) => ({
+    key: d.key,
+    role: d.transfer.role,
+    peerId: d.transfer.invite.peerId,
+    secret: toB64url(d.transfer.invite.secret),
+    name: d.name,
+    lastActive: d.lastActive,
+    messages: d.messages.map(({ id, dir, at, kind, text, meta, total, status }) => ({ id, dir, at, kind, text, meta, total, status })),
+  }));
+  try {
+    if (saved.length) sessionStorage.setItem(SAVE_KEY, JSON.stringify(saved));
+    else sessionStorage.removeItem(SAVE_KEY);
+  } catch {
+    /* storage full or blocked: sessions just won't outlive the page */
+  }
+}
+
+function restore() {
+  let saved: Saved[] = [];
+  try {
+    saved = JSON.parse(sessionStorage.getItem(SAVE_KEY) ?? '[]');
+  } catch {
+    /* nothing usable */
+  }
+  const now = Date.now();
+  for (const s of saved) {
+    if (now - s.lastActive >= IDLE_MS) continue;
+    const invite: Invite = { peerId: s.peerId, secret: fromB64url(s.secret), hostSends: false };
+    const messages: Message[] = s.messages.map((m) => ({
+      ...m,
+      files: [],
+      done: m.status === 'complete' ? m.total : 0,
+      current: '',
+      // Anything mid-way when the page went away has to be sent again.
+      status: m.status === 'complete' ? 'complete' : 'interrupted',
+    }));
+    const d = add(
+      (key) =>
+        s.role === 'host'
+          ? DirectTransfer.host(false, handlersFor(key), { name: myName, invite, resume: true })
+          : DirectTransfer.join(invite, handlersFor(key), { name: myName, resume: true }),
+      { key: s.key, name: s.name, paired: true, lastActive: s.lastActive, messages },
+    );
+    for (const m of d.messages) {
+      if (m.kind !== 'files') continue;
+      history.loadFiles(m.id, m.meta.length).then((files) => {
+        const live = getDevice(d.key)?.messages.find((x) => x.id === m.id);
+        if (files && live) live.files = files;
+      });
+    }
+  }
+  history.purgeStale(hub.devices.map((d) => d.key));
+}
+
+/** Close idle sessions and expired codes; keep live sessions' files marked as in use. */
+function tick() {
+  const now = (hub.now = Date.now());
+  for (const d of hub.devices) {
+    if (!isLive(d) || now - d.lastActive < IDLE_MS) continue;
+    if (d.paired) d.transfer.end('idle');
+    else {
+      d.transfer.shutdown();
+      d.conn = { state: 'ended', message: 'This code expired.' };
+    }
+  }
+  if (now % 30_000 < 1_000) for (const d of liveDevices()) history.setAlive(d.key, now);
+}
+
+if (typeof window !== 'undefined') {
+  restore();
+  for (const d of liveDevices()) history.setAlive(d.key, Date.now());
+  setInterval(tick, 1_000);
+  // Leaving the page drops the connections at once; the other side waits for this page to come back.
+  addEventListener('pagehide', () => {
+    save();
+    for (const d of hub.devices) d.transfer.shutdown();
+  });
+  // Back from the browser's page cache, the connections are gone: start again from what was saved.
+  addEventListener('pageshow', (e) => (e as PageTransitionEvent).persisted && location.reload());
+}

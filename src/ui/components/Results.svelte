@@ -9,8 +9,7 @@
   import CompareSlider from './CompareSlider.svelte';
   import FilePreview from './FilePreview.svelte';
   import PdfViewer from './PdfViewer.svelte';
-  import { fitsQr as fitsOneQr, sendFiles, shareFile } from '../share-target';
-  import { isConnected } from '../transfer.svelte';
+  import ShareMenu from './ShareMenu.svelte';
 
   let {
     results,
@@ -73,17 +72,6 @@
     return `${change < 0 ? '−' : '+'}${Math.abs(Math.round(change * 100))}%`;
   }
 
-  /** Small files share as a QR code (Share page); bigger ones over a direct, encrypted connection. */
-  const fitsQr = $derived(results.map((r) => fitsOneQr(r)));
-
-  function share(r: OutputFile, i: number) {
-    shareFile({ name: r.name, type: r.type, bytes: r.bytes }, fitsQr[i]);
-  }
-
-  function sendAll() {
-    sendFiles(results.map((r) => ({ name: r.name, type: r.type, bytes: r.bytes })));
-  }
-
   function canCompare(r: OutputFile): boolean {
     return r.type.startsWith('image/') && r.inputIndex !== undefined && inputs[r.inputIndex]?.type.startsWith('image/');
   }
@@ -102,9 +90,10 @@
   <div class="cta">
     {#if results.length === 1}
       <button class="btn btn-primary btn-lg" onclick={() => download(toBlob(results[0]), results[0].name)}>⬇ Download</button>
+      <ShareMenu files={results} variant="btn-lg" />
     {:else}
       <button class="btn btn-primary btn-lg" disabled={zipping} onclick={downloadAll}>{zipping ? 'Zipping…' : '⬇ Download all (ZIP)'}</button>
-      <button class="btn btn-lg" title="Send every file to your phone over a direct, encrypted connection" onclick={sendAll}>📡 Send all to phone</button>
+      <ShareMenu files={results} label="Share all" variant="btn-lg" />
     {/if}
   </div>
 </div>
@@ -151,11 +140,7 @@
         <button class="btn" onclick={() => copyText(r, i)}>{copied === i ? '✓ Copied' : 'Copy'}</button>
       {/if}
       <button class="btn" onclick={() => download(toBlob(r), r.name)}>Download</button>
-      {#if fitsQr[i] && !isConnected()}
-        <button class="btn" title="Small enough for a QR code: scan it with your phone to get the file" onclick={() => share(r, i)}>📱 QR code</button>
-      {:else}
-        <button class="btn" title="Too big for a QR code: send it to your phone over a direct, encrypted connection" onclick={() => share(r, i)}>📡 Send to phone</button>
-      {/if}
+      {#if results.length > 1}<ShareMenu files={[r]} />{/if}
       {#if isText(r) && showText[i]}
         <div class="textout"><FilePreview file={asFile(r)} /></div>
       {/if}

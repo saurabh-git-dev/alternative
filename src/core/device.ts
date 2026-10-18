@@ -41,3 +41,39 @@ export function pixelBudget(desktop: number, info = deviceInfo()): number {
   if (!isConstrained(info)) return desktop;
   return Math.min(desktop, info.memoryGB !== undefined && info.memoryGB >= 6 ? 32_000_000 : 16_000_000);
 }
+
+/**
+ * A short, human name for this device and browser, such as "iPhone · Safari"
+ * or "Windows · Edge", shown on the other device during a direct transfer.
+ */
+export function deviceName(ua = typeof navigator === 'undefined' ? '' : navigator.userAgent, touch = typeof navigator === 'undefined' ? 0 : navigator.maxTouchPoints): string {
+  const device = /iPhone/.test(ua)
+    ? 'iPhone'
+    : /iPad/.test(ua) || (/Macintosh/.test(ua) && touch > 1)
+      ? 'iPad'
+      : /Android/.test(ua)
+        ? /Mobile/.test(ua) ? 'Android phone' : 'Android tablet'
+        : /CrOS/.test(ua)
+          ? 'Chromebook'
+          : /Macintosh/.test(ua)
+            ? 'Mac'
+            : /Windows/.test(ua)
+              ? 'Windows'
+              : /Linux/.test(ua)
+                ? 'Linux'
+                : 'Device';
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /OPR\//.test(ua)
+      ? 'Opera'
+      : /SamsungBrowser/.test(ua)
+        ? 'Samsung Internet'
+        : /Firefox|FxiOS/.test(ua)
+          ? 'Firefox'
+          : /Chrome|CriOS/.test(ua)
+            ? 'Chrome'
+            : /Safari/.test(ua)
+              ? 'Safari'
+              : '';
+  return browser ? `${device} · ${browser}` : device;
+}

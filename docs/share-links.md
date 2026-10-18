@@ -48,28 +48,40 @@ A damaged or truncated link shows a clear error rather than a broken file.
 ## Direct transfers (any size)
 
 Files too big for a link go straight from one browser to the other over
-WebRTC (`src/core/direct.ts`, page `src/ui/pages/Direct.svelte`). It is a
-session, not a one-off: once two devices connect, either side can send files
-at any time, as often as it likes, until one side presses **End session** or
-closes the page.
+WebRTC (`src/core/direct.ts`). It is a session, not a one-off: once two
+devices connect, either side can send files and text at any time, as often
+as it likes.
 
-- **Send to your phone** (`#/direct`) and **Get files from your phone**
-  (`#/direct/receive`) show a QR code; they differ only in the wording and
-  whether files are picked first.
-- **Scan to connect** (`#/scan`, the 📷 Scan button in the header) reads a
-  code with the camera inside the app: BarcodeDetector where the browser has
-  it, the jsQR decoder elsewhere (iOS Safari), or a photo of the code.
-- Received images, PDFs, CSV, JSON, text, audio and video preview in place
-  (`src/ui/components/FilePreview.svelte`, shared with share links and tool
-  results). PDFs open in a full viewer (`PdfViewer.svelte`) that draws every
-  page as you scroll, so they read the same on phones that can't show PDFs.
-- **Edit** on a received file (`EditMenu.svelte`) lists every tool for its
-  type: PDF, image and video tools open in this tab with the file loaded;
-  IT tools for text open in a new tab with the text filled in.
-- The session lives outside any page (`src/ui/transfer.svelte.ts`), so it
-  stays connected while you use tools; the header shows **📡 Connected** to
-  get back to it, and a result's **Send to phone** goes over it. Switching to
-  another section (a different page) or closing the tab ends it.
+- **Connect** (`#/connect`, the 🔗 button in the header;
+  `src/ui/connect/ConnectPage.svelte`) has two tabs: **Show my code** (the
+  default) shows a QR code for the other device; **Scan a code** reads the
+  other device's code with the camera (`QrScanner.svelte`: BarcodeDetector
+  where the browser has it, the jsQR decoder elsewhere, or a photo). The old
+  `#/direct`, `#/direct/receive` and `#/scan` links open it.
+- Several devices can be connected at once, one session each. The header
+  button shows a green dot for one, a count for several. Each device has a
+  chat (`Chat.svelte`): text and files in order, received files previewed in
+  place (`FilePreview.svelte`; PDFs in the full `PdfViewer.svelte`), with
+  **Edit** (`EditMenu.svelte`) listing every tool for the file's type,
+  whatever section you're in, so a video sent while you're in the PDF tools
+  opens in a video tool.
+- Arrivals show in a corner notice on every other page
+  (`connect/Notice.svelte`), with Edit, Download and Open chat.
+- **Share** (`components/ShareMenu.svelte`) is the one share button for
+  every result, IT tool output and recording. Hover or tap: connected
+  devices first, then **Someone else** (a new QR code; the file goes when it
+  connects), then **QR code or link** / **Link** only when the file fits in
+  a link, then the system share sheet where there is one.
+- Sessions live outside any page (`src/ui/connect/devices.svelte.ts`) and
+  survive reloads and switching sections: the invite is kept in
+  sessionStorage (this tab only) and both sides reconnect by themselves. Chat
+  text is kept with it, files in IndexedDB (`connect/history-db.ts`), and all
+  of it is deleted when the session ends.
+- A session closes on both devices after **5 minutes without anything sent
+  or received**; the chat shows the countdown. A QR code nobody scans expires
+  the same way. **End** closes it at once.
+- Each device says its name (`deviceName()` in `src/core/device.ts`, such as
+  "iPhone · Safari") once per connection.
 
 The QR code holds `<app>#/d/<id>.<secret>.<s|r>`: a random peer ID, a
 128-bit secret and which side started with files. A free public matchmaker
@@ -78,10 +90,12 @@ it never sees the files, and never sees the secret, because URL fragments
 aren't sent to servers. On networks that block direct connections, PeerJS's
 free TURN relay carries the traffic, still encrypted.
 
-If the connection drops (a phone locks its screen, Wi-Fi blips), the host
-keeps the same ID and goes back to waiting, and the guest retries for three
-minutes, so nobody has to scan again. A batch that was cut off restarts from
-the beginning after reconnecting. Only one guest can be connected at a time.
+If the connection drops (a phone locks its screen, Wi-Fi blips, a page
+reloads), the host keeps the same ID and goes back to waiting (a reloaded
+host registers it again), and the guest retries for three minutes, so nobody
+has to scan again. A batch that was cut off restarts from the beginning after
+reconnecting; text messages are re-sent until confirmed. Each session links
+one host and one guest.
 
 Security (`src/core/direct-crypto.ts`), checked on every connection:
 

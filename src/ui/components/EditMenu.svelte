@@ -16,6 +16,11 @@
   const MAX_IT_TEXT = 200_000;
 
   let menu = $state<HTMLDetailsElement>();
+  let panel = $state<HTMLDivElement>();
+  let pos = $state({ top: 0, left: 0 });
+  let opened = $state(false);
+  /** Hidden until placed, so it never flashes in the corner. */
+  let placed = $state(false);
   let text = $state('');
   let itTools = $state<Suggestion[]>([]);
 
@@ -24,26 +29,47 @@
   const isText = $derived(/^text\/|^application\/json$/.test(type) || /\.(txt|csv|json|md|ya?ml|log)$/i.test(file.name));
 
   async function onToggle() {
+    opened = !!menu?.open;
+    if (!opened) placed = false;
     if (!menu?.open || !isText || text || file.size > MAX_IT_TEXT) return;
     text = await file.text();
     const t = /\.csv$/i.test(file.name) ? 'text/csv' : /\.json$/i.test(file.name) ? 'application/json' : type;
     itTools = suggestItTools(t, text);
   }
 
+  // Fixed to the window, so it isn't cut off inside a scrolling list; above the button near the bottom.
+  $effect(() => {
+    void itTools.length;
+    if (!opened || !menu || !panel) return;
+    const b = menu.getBoundingClientRect();
+    const h = panel.offsetHeight;
+    const w = panel.offsetWidth;
+    const below = b.bottom + 6 + h <= innerHeight || b.top < h + 6;
+    pos = { top: below ? b.bottom + 6 : Math.max(8, b.top - 6 - h), left: Math.max(8, Math.min(b.right - w, innerWidth - w - 8)) };
+    placed = true;
+  });
+
   // Close when clicking elsewhere.
   $effect(() => {
     const onClick = (e: MouseEvent) => {
       if (menu?.open && !menu.contains(e.target as Node)) menu.open = false;
     };
+    const onScroll = (e: Event) => {
+      if (menu?.open && !panel?.contains(e.target as Node)) menu.open = false;
+    };
     addEventListener('click', onClick);
-    return () => removeEventListener('click', onClick);
+    addEventListener('scroll', onScroll, { capture: true, passive: true });
+    return () => {
+      removeEventListener('click', onClick);
+      removeEventListener('scroll', onScroll, { capture: true });
+    };
   });
 </script>
 
 {#if tools.length || isText}
   <details class="menu" bind:this={menu} ontoggle={onToggle}>
     <summary class="btn" title="Open this file in a tool">✏️ Edit</summary>
-    <div class="panel card" role="menu">
+    <div class="panel card" role="menu" bind:this={panel} style:top="{pos.top}px" style:left="{pos.left}px" style:visibility={placed ? 'visible' : 'hidden'}>
       {#each tools as tool (tool.id)}
         <button role="menuitem" onclick={() => onOpen(tool.id, [file])}><span aria-hidden="true">{tool.icon}</span> {tool.title}</button>
       {/each}
@@ -69,10 +95,8 @@
     display: none;
   }
   .panel {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
-    z-index: 20;
+    position: fixed;
+    z-index: 60;
     display: grid;
     min-width: 220px;
     max-height: 60vh;
