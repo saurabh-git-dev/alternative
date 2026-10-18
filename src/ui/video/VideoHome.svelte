@@ -32,8 +32,7 @@
       }),
     ),
     { key: 'record', icon: '⏺️', title: 'Record your screen', description: 'Screen, camera and mic, saved in this browser.', keywords: 'loom capture screencast webcam', group: 'more', href: RECORD_HOME },
-    { key: 'direct', icon: '📡', title: 'Send to your phone', description: 'Any size, either way, end-to-end encrypted.', keywords: 'transfer share airdrop', group: 'more', href: '#/direct' },
-    { key: 'receive', icon: '📥', title: 'Get videos from your phone', description: 'Scan a QR code with your phone and send videos here.', keywords: 'receive transfer import', group: 'more', href: '#/direct/receive' },
+    { key: 'connect', icon: '🔗', title: 'Connect a device', description: 'Send videos to and from your phone by QR code, any size, end-to-end encrypted.', keywords: 'transfer share airdrop receive import phone scan', group: 'more', href: '#/connect' },
   ]);
   const GROUPS = [...VIDEO_CATEGORIES, { id: 'more', label: 'Record & share', icon: '✨' }];
 

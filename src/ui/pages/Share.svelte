@@ -8,7 +8,6 @@
   import { formatBytes, readFile } from '../../core/files';
   import {
     LONG_LINK_CHARS,
-    MAX_LINK_CHARS,
     appUrl,
     linkFor,
     pack,
@@ -18,13 +17,11 @@
   } from '../../core/share';
   import { detectTextType } from '../../core/text-formats';
   import { fitImage } from '../../core/runner';
-  import { handoff, takeHandoff } from '../handoff.svelte';
-  import { isConnected } from '../transfer.svelte';
+  import { takeHandoff } from '../handoff.svelte';
+  import { MAX_LINK_FILE_BYTES as MAX_FILE_BYTES } from '../share-target';
+  import ShareMenu from '../components/ShareMenu.svelte';
   import Dropzone from '../components/Dropzone.svelte';
   import QrCode from '../components/QrCode.svelte';
-
-  /** Raw files above this can't make a usable link (base64 adds a third). */
-  const MAX_FILE_BYTES = Math.floor((MAX_LINK_CHARS * 3) / 4) - 1024;
 
   const handed = takeHandoff();
   let mode = $state<'file' | 'text'>('file');
@@ -108,12 +105,6 @@
     setTimeout(() => (copied = false), 1500);
   }
 
-  /** Hand the file to the direct transfer page, which has no size limit. */
-  function sendDirect() {
-    handoff.file = current ? $state.snapshot(current) as FileData : null;
-    location.hash = '#/direct';
-  }
-
   function shareLink() {
     navigator.share({ title: current?.name, url: link }).catch(() => {});
   }
@@ -184,7 +175,7 @@
       <p class="muted empty">Add a file or some text to get a link and QR code.</p>
     {:else if tooBig}
       <p class="muted">This file is {formatBytes(current.bytes.length)}, more than a link can carry (about {formatBytes(MAX_FILE_BYTES)}). Send it straight to your other device instead: any size, end-to-end encrypted.</p>
-      <button class="btn btn-primary" onclick={sendDirect}>📡 Send directly</button>
+      <ShareMenu files={[$state.snapshot(current) as FileData]} label="Send to a device" />
     {:else if packed}
       <p class="stats small muted">
         Packed size <strong>{formatBytes(packed.length)}</strong>{#if packed.length < current.bytes.length * 0.95}, compressed from {formatBytes(current.bytes.length)}{/if}.
@@ -222,29 +213,11 @@
         {/if}
       </div>
 
-      <div class="direct">
-        <button class="btn" onclick={sendDirect}>📡 {isConnected() ? 'Send to connected device' : 'Send over a direct connection'}</button>
-        <p class="muted small">
-          {isConnected()
-            ? 'Goes straight to the device you are connected to.'
-            : 'No size limit, end-to-end encrypted, and the connection stays open for more files. Both devices need to be online.'}
-        </p>
-      </div>
     {/if}
   </section>
 </div>
 
 <style>
-  .direct {
-    display: grid;
-    justify-items: start;
-    gap: 6px;
-    padding-top: 14px;
-    border-top: 1px solid var(--border);
-  }
-  .direct p {
-    margin: 0;
-  }
   .back {
     display: inline-block;
     margin: 4px 0 12px;

@@ -1,9 +1,9 @@
 <!--
   App shell: header and a tiny hash router.
   Routes: `#/` (home), `#/tool/<action id>`, `#/share`, share links
-  `#/s/<data>` / `#/q/<data>` (see core/share.ts), direct transfers
-  `#/direct`, `#/direct/receive` and `#/d/<invite>` (see core/direct.ts),
-  `#/scan` (in-app QR scanner), `#/pipeline[/<data>]`
+  `#/s/<data>` / `#/q/<data>` (see core/share.ts), connected devices
+  `#/connect[/…]` and `#/d/<invite>` (see connect/ConnectPage.svelte; the
+  old `#/direct`, `#/direct/receive` and `#/scan` open it too), `#/pipeline[/<data>]`
   (see core/pipeline.ts) and `#/compare`. Hash routing works on any
   static host with no server configuration.
 
@@ -21,8 +21,8 @@
   import Received from './pages/Received.svelte';
   import PipelinePage from './pages/Pipeline.svelte';
   import Compare from './pages/Compare.svelte';
-  import Direct from './pages/Direct.svelte';
-  import Scan from './pages/Scan.svelte';
+  import ConnectPage from './connect/ConnectPage.svelte';
+  import Notice from './connect/Notice.svelte';
   import ItHome from './it/ItHome.svelte';
   import ItTool from './it/ItTool.svelte';
   import VideoHome from './video/VideoHome.svelte';
@@ -33,7 +33,7 @@
   import { LINK_ROUTE, QR_ROUTE } from '../core/share';
   import { DIRECT_ROUTE } from '../core/direct';
   import { getAction } from '../actions';
-  import { isLive, session } from './transfer.svelte';
+  import { connectedCount, liveDevices } from './connect/devices.svelte';
   import { loadTheme, saveTheme, type Theme } from './settings';
   import { canInstall, install } from '../pwa/install.svelte';
 
@@ -84,10 +84,8 @@
           ? 'compare'
           : hash === '#/share'
           ? 'share'
-          : hash === '#/scan'
-          ? 'scan'
-          : hash === '#/direct' || hash === '#/direct/receive' || hash.startsWith(`#${DIRECT_ROUTE}`)
-          ? 'direct'
+          : hash === '#/connect' || hash.startsWith('#/connect/') || hash === '#/scan' || hash.startsWith('#/direct') || hash.startsWith(`#${DIRECT_ROUTE}`)
+          ? 'connect'
           : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : `${section}-home`,
   );
 
@@ -111,10 +109,8 @@
         ? 'Compare PDFs · Tools'
         : page === 'share'
         ? 'Share as link or QR · Tools'
-        : page === 'scan'
-        ? 'Scan to connect · Tools'
-        : page === 'direct'
-        ? 'Send between devices · Tools'
+        : page === 'connect'
+        ? 'Connect devices · Tools'
         : 'Shared file · Tools';
   });
 
@@ -124,6 +120,9 @@
     { id: 'record', href: RECORD_HOME, icon: '⏺️', label: 'Screen recorder', short: 'Record' },
     { id: 'it', href: IT_HOME, icon: '🛠️', label: 'IT tools', short: 'IT' },
   ];
+
+  const connected = $derived(connectedCount());
+  const live = $derived(liveDevices().length);
 
   function toggleTheme() {
     theme = theme === 'dark' ? 'light' : 'dark';
@@ -151,14 +150,24 @@
   <span class="badge" title="Every tool runs inside your browser using WebAssembly. Nothing is uploaded.">
     🔒 Files never leave your device
   </span>
-  {#if isLive() && page !== 'direct'}
-    <!-- A direct-transfer session stays open across pages; this gets back to it. -->
-    <a class="scan live" href="#/direct" title="Back to your connected device">
-      📡 <span>{session.conn?.state === 'connected' ? 'Connected' : session.conn?.state === 'reconnecting' ? 'Reconnecting…' : 'Waiting…'}</span>
-    </a>
-  {:else}
-    <a class="scan" href="#/scan" title="Scan a QR code from your other device to connect or open a shared file">📷 <span>Scan</span></a>
-  {/if}
+  <!-- Connected devices stay connected across pages; a green dot (or a count, for several) shows it. -->
+  <a
+    class="scan"
+    class:live={connected > 0}
+    class:active={page === 'connect'}
+    href="#/connect"
+    title={connected ? `${connected} device${connected > 1 ? 's' : ''} connected` : live ? 'Reconnecting to your device' : 'Connect your phone or another computer to send files and text'}
+  >
+    <span class="link-icon" aria-hidden="true">🔗</span>
+    <span class="label">Connect</span>
+    {#if connected > 1}
+      <span class="count">{connected}</span>
+    {:else if connected === 1}
+      <span class="dot" aria-hidden="true"></span>
+    {:else if live}
+      <span class="dot waiting" aria-hidden="true"></span>
+    {/if}
+  </a>
   {#if canInstall()}
     <button class="install" onclick={install} title="Install Tools as an app. It opens in its own window and works offline.">
       ⬇️ <span>Install</span>
@@ -194,11 +203,9 @@
     <Compare />
   {:else if page === 'share'}
     <Share />
-  {:else if page === 'scan'}
-    <Scan />
-  {:else if page === 'direct'}
+  {:else if page === 'connect'}
     {#key hash}
-      <Direct {hash} onOpen={openTool} />
+      <ConnectPage {hash} onOpen={openTool} />
     {/key}
   {:else if page === 'received'}
     <Received {hash} onOpen={openTool} />
@@ -206,6 +213,8 @@
     <Home onOpen={openTool} />
   {/if}
 </main>
+
+<Notice onOpen={openTool} />
 
 <footer class="muted">
   {#if section === 'it'}
@@ -317,8 +326,31 @@
   }
   .scan.live {
     border-color: var(--success);
-    color: var(--success);
-    background: var(--success-soft);
+  }
+  .scan.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .scan .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 3px var(--success-soft);
+  }
+  .scan .dot.waiting {
+    background: var(--warning);
+    box-shadow: none;
+  }
+  .scan .count {
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 99px;
+    background: var(--success);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
   }
   .loading {
     text-align: center;
@@ -365,7 +397,7 @@
       gap: 8px;
     }
     .logo .name,
-    .scan span,
+    .scan .label,
     .install span {
       display: none;
     }

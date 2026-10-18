@@ -11,9 +11,7 @@
 
   const SHARE: CatalogEntry[] = [
     { key: 'share', icon: '🔗', title: 'Share text as QR code', description: 'Put text, JSON or a small file into a QR code and link.', keywords: 'send phone qr', group: 'share', href: '#/share' },
-    { key: 'direct', icon: '📡', title: 'Send to your phone', description: 'Any size, either way, end-to-end encrypted.', keywords: 'transfer airdrop', group: 'share', href: '#/direct' },
-    { key: 'receive', icon: '📥', title: 'Get files from your phone', description: 'Scan a QR code with your phone and send files here.', keywords: 'receive transfer', group: 'share', href: '#/direct/receive' },
-    { key: 'scan', icon: '📷', title: 'Scan a QR code', description: "Read a QR code with this device's camera.", keywords: 'camera scanner reader', group: 'share', href: '#/scan' },
+    { key: 'connect', icon: '🔗', title: 'Connect a device', description: 'Send files and text to your phone or another computer, any size, either way.', keywords: 'transfer airdrop receive phone scan qr camera chat', group: 'share', href: '#/connect' },
   ];
 
   const entries: CatalogEntry[] = [

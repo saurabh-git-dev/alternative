@@ -2,8 +2,8 @@
   The recordings saved in this browser (core/recordings.ts): watch, rename,
   download, share to another device, open in a video tool, or delete.
 
-  Sharing uses the app's usual route: a QR code for tiny files, otherwise a
-  direct, end-to-end encrypted transfer (ui/share-target.ts). "Edit" opens
+  Share is the app's usual menu (components/ShareMenu.svelte): a connected
+  device, or a new one by QR code, end-to-end encrypted. "Edit" opens
   a video tool in the Video section with the recording loaded.
 -->
 <script lang="ts">
@@ -11,7 +11,7 @@
   import { deleteRecording, fileNameFor, recordingBlob, storageUse, updateMeta, type RecordingMeta } from '../../core/recordings';
   import { download, formatBytes } from '../../core/files';
   import { formatTime } from '../../core/video';
-  import { shareFile } from '../share-target';
+  import ShareMenu from '../components/ShareMenu.svelte';
   import { videoToolHref } from '../section';
 
   let { recordings = $bindable(), busy = [], openId = $bindable(null) }: { recordings: RecordingMeta[]; busy?: string[]; openId?: string | null } = $props();
@@ -20,7 +20,6 @@
   let playing = $state<{ id: string; url: string } | null>(null);
   let renaming = $state<string | null>(null);
   let usage = $state<{ used: number; quota: number } | null>(null);
-  let working = $state<string | null>(null);
 
   const EDITS = [
     { id: 'video.trim', label: '✂️ Trim' },
@@ -68,14 +67,8 @@
     download(await recordingBlob(meta.id, meta.type), fileNameFor(meta));
   }
 
-  async function share(meta: RecordingMeta) {
-    working = meta.id;
-    try {
-      const blob = await recordingBlob(meta.id, meta.type);
-      shareFile({ name: fileNameFor(meta), type: meta.type, bytes: new Uint8Array(await blob.arrayBuffer()) });
-    } finally {
-      working = null;
-    }
+  async function asFile(meta: RecordingMeta): Promise<File[]> {
+    return [new File([await recordingBlob(meta.id, meta.type)], fileNameFor(meta), { type: meta.type })];
   }
 
   async function remove(meta: RecordingMeta) {
@@ -99,7 +92,7 @@
 
 {#snippet actions(meta: RecordingMeta)}
   <button class="btn dl" onclick={() => save(meta)} title="Download">⬇<span class="lbl"> Download</span></button>
-  <button class="btn" onclick={() => share(meta)} disabled={working === meta.id} title="Send to your phone or another computer, end-to-end encrypted">📡<span class="lbl"> Share</span></button>
+  <ShareMenu files={() => asFile(meta)} />
   <details class="menu">
     <summary class="btn" title="Open in a video tool">✏️<span class="lbl"> Edit</span></summary>
     <div class="items card">

@@ -72,3 +72,14 @@ describe('scanned codes', () => {
     expect(routeFromScan('hello')).toBeNull();
   });
 });
+
+describe('device names', () => {
+  it('names common phones, tablets and computers with their browser', async () => {
+    const { deviceName } = await import('../src/core/device');
+    expect(deviceName('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', 5)).toBe('iPhone · Safari');
+    expect(deviceName('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15', 5)).toBe('iPad · Safari');
+    expect(deviceName('Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36', 5)).toBe('Android phone · Chrome');
+    expect(deviceName('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 Edg/120.0', 0)).toBe('Windows · Edge');
+    expect(deviceName('Mozilla/5.0 (Macintosh; Intel Mac OS X 14.0; rv:121.0) Gecko/20100101 Firefox/121.0', 0)).toBe('Mac · Firefox');
+  });
+});

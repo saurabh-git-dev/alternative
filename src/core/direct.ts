@@ -18,11 +18,13 @@
  * - Before anything is sent, both sides prove they hold the secret and see
  *   the same connection certificates, and every message is sealed with
  *   AES-256-GCM (see core/direct-crypto.ts).
- * - Once connected, either side can send files at any time, as often as it
- *   likes, until one side ends the session or closes the page. If the
- *   connection drops (a phone locks its screen, Wi-Fi blips), the guest
- *   reconnects to the same host with the same secret and fresh keys, so
- *   nobody has to scan again. Only one guest can be connected at a time.
+ * - Once connected, either side can send files and text messages at any
+ *   time, as often as it likes, until one side ends the session. If the
+ *   connection drops (a phone locks its screen, Wi-Fi blips, a page
+ *   reloads), the guest reconnects to the same host with the same secret and
+ *   fresh keys, so nobody has to scan again. A reloaded host registers the
+ *   same ID again (`resume`). Each transfer links one host and one guest; a
+ *   device connected to several others runs one transfer per device.
  * - `s` / `r` in the link say whether the host started with files to send;
  *   it only decides which screen the guest opens on.
  *
@@ -32,6 +34,11 @@
  * then says `done`; the receiver checks the sizes and confirms (`got`).
  * Each side sends one batch at a time, so bytes always belong to the batch
  * that side announced last; batches in the two directions can overlap.
+ * Other control messages: `hello` (the device's display name, sent once
+ * per connection), `text` (a chat message, confirmed with `got`, re-sent
+ * after a reconnect until confirmed, so the receiver drops repeats by id)
+ * and `bye` (end the session). Frames go out strictly in the order they
+ * are sealed, because the receiver expects consecutive counter nonces.
  */
 import type { DataConnection, Peer, PeerOptions } from 'peerjs';
 import { Channel, authKey, authTag, channelKeys, fromB64url, newNonce, newSecret, sdpFingerprint, toB64url, verifyTag, type Role } from './direct-crypto';
@@ -75,6 +82,17 @@ export interface Handlers {
   onSent?: (id: string) => void;
   /** A batch stopped part-way (the connection dropped). */
   onAborted?: (id: string, direction: 'send' | 'receive') => void;
+  /** The other device said its name (once per connection). */
+  onHello?: (name: string) => void;
+  /** A text message arrived. The same id can arrive twice after a reconnect. */
+  onText?: (id: string, text: string, at: number) => void;
+}
+
+export interface TransferOptions {
+  /** This device's display name, shown on the other device. */
+  name?: string;
+  /** Picking up a session after this page reloaded: keep trying to reconnect instead of failing. */
+  resume?: boolean;
 }
 
 interface FileMeta {
@@ -93,6 +111,10 @@ const CONNECT_TIMEOUT_MS = 25_000;
 /** How long a guest keeps trying to get back after the connection drops. */
 const RECONNECT_FOR_MS = 3 * 60_000;
 const RECONNECT_EVERY_MS = 4_000;
+/** A reloaded host may find its ID still taken for a moment; how long it keeps asking for it. */
+const RECLAIM_FOR_MS = 30_000;
+
+const IDLE_MESSAGE = 'Closed after 5 minutes without activity.';
 
 const SERVER_SETTING = 'formatter-peer-server';
 
@@ -158,6 +180,13 @@ interface Link {
   inbox: Promise<void>;
   incoming: { id: string; list: FileMeta[]; index: number; parts: Uint8Array[]; got: number; files: File[] } | null;
   confirm: Map<string, () => void>;
+  /** Frames go out one after another, in sealing order. */
+  out: Promise<void>;
+  /** Text messages already sent over this connection, awaiting `got`. */
+  textsSent: Set<string>;
+  /** Settles once this side's own tag is sent; nothing else may go out (or be checked) before it. */
+  authSent: Promise<void>;
+  authDone: () => void;
 }
 
 export class DirectTransfer {
@@ -170,25 +199,36 @@ export class DirectTransfer {
   /** Batches waiting to go out, sent one after another. */
   private outbox: { id: string; files: File[] }[] = [];
   private sending = false;
+  /** Text messages not yet confirmed by the other device. */
+  private texts = new Map<string, { text: string; at: number }>();
+  private reclaimUntil = 0;
 
   private constructor(
     readonly invite: Invite,
     readonly role: Role,
     private handlers: Handlers,
+    private options: TransferOptions,
   ) {
     this.auth = authKey(invite.secret);
   }
 
-  /** Start waiting for a guest. Show `inviteLink(…, transfer.invite)` as a QR code once the state is `waiting`. */
-  static host(hostSends: boolean, handlers: Handlers): DirectTransfer {
-    const transfer = new DirectTransfer({ peerId: newPeerId(), secret: newSecret(), hostSends }, 'host', handlers);
+  /**
+   * Start waiting for a guest. Show `inviteLink(…, transfer.invite)` as a QR
+   * code once the state is `waiting`. Pass `invite` (with `resume`) to pick
+   * up a session this page hosted before it reloaded.
+   */
+  static host(hostSends: boolean, handlers: Handlers, options: TransferOptions & { invite?: Invite } = {}): DirectTransfer {
+    const invite = options.invite ?? { peerId: newPeerId(), secret: newSecret(), hostSends };
+    const transfer = new DirectTransfer(invite, 'host', handlers, options);
+    if (options.resume) transfer.reclaimUntil = Date.now() + RECLAIM_FOR_MS;
     transfer.start();
     return transfer;
   }
 
   /** Connect to the host from an invite link. */
-  static join(invite: Invite, handlers: Handlers): DirectTransfer {
-    const transfer = new DirectTransfer(invite, 'guest', handlers);
+  static join(invite: Invite, handlers: Handlers, options: TransferOptions = {}): DirectTransfer {
+    const transfer = new DirectTransfer(invite, 'guest', handlers, options);
+    if (options.resume) transfer.reconnectUntil = Date.now() + RECONNECT_FOR_MS;
     transfer.start();
     return transfer;
   }
@@ -214,9 +254,17 @@ export class DirectTransfer {
       const peer = this.role === 'host' ? new Peer(this.invite.peerId, peerOptions()) : new Peer(peerOptions());
       this.peer = peer;
       peer.on('error', (e) => {
+        const type = (e as { type?: string }).type;
         // A guest retrying after a drop sees "unavailable" while the host is briefly away; keep trying.
-        if (this.role === 'guest' && Date.now() < this.reconnectUntil && (e as { type?: string }).type === 'peer-unavailable') {
+        if (this.role === 'guest' && Date.now() < this.reconnectUntil && type === 'peer-unavailable') {
           if (this.link) this.lost(this.link);
+          else this.timer = setTimeout(() => this.dial(), RECONNECT_EVERY_MS);
+          return;
+        }
+        // A reloaded host's old registration can linger for a moment; ask again.
+        if (this.role === 'host' && Date.now() < this.reclaimUntil && type === 'unavailable-id') {
+          peer.destroy();
+          this.timer = setTimeout(() => !this.ended && this.start(), 2_000);
           return;
         }
         this.fail(explain(e));
@@ -225,7 +273,8 @@ export class DirectTransfer {
       peer.on('disconnected', () => !this.ended && !peer.destroyed && peer.reconnect());
       peer.on('open', () => {
         if (this.role === 'host') {
-          this.state({ state: 'waiting', reconnect: false });
+          this.reclaimUntil = 0;
+          this.state({ state: 'waiting', reconnect: !!this.options.resume });
           peer.on('connection', (conn) => {
             // One guest at a time; anyone else is turned away.
             if (this.link) conn.close();
@@ -247,7 +296,21 @@ export class DirectTransfer {
   }
 
   private attach(conn: DataConnection) {
-    const link: Link = { conn, channel: null, secured: false, nonce: newNonce(), fingerprints: null, inbox: Promise.resolve(), incoming: null, confirm: new Map() };
+    const link: Link = {
+      conn,
+      channel: null,
+      secured: false,
+      nonce: newNonce(),
+      fingerprints: null,
+      inbox: Promise.resolve(),
+      incoming: null,
+      confirm: new Map(),
+      out: Promise.resolve(),
+      textsSent: new Set(),
+      authSent: Promise.resolve(),
+      authDone: () => {},
+    };
+    link.authSent = new Promise((resolve) => (link.authDone = resolve));
     this.link = link;
     if (Date.now() >= this.reconnectUntil) this.state({ state: 'connecting' });
     clearTimeout(this.timer);
@@ -303,11 +366,15 @@ export class DirectTransfer {
     link.fingerprints = { own: sdpFingerprint(pc.localDescription?.sdp), peer: sdpFingerprint(pc.remoteDescription?.sdp) };
     const tag = await authTag(await this.auth, this.role, link.fingerprints.own, link.fingerprints.peer, link.nonce);
     link.conn.send(JSON.stringify({ t: 'auth', nonce: link.nonce, tag }));
+    link.authDone();
   }
 
   private async onData(link: Link, data: unknown) {
     if (this.link !== link) return;
     if (!link.secured) {
+      // The other side's tag can arrive before this side has sent its own (or even seen the connection open).
+      await link.authSent;
+      if (this.link !== link) return;
       // The only message accepted before the check passes is the other side's tag.
       const message = typeof data === 'string' ? JSON.parse(data) : null;
       if (message?.t !== 'auth' || typeof message.nonce !== 'string' || !link.fingerprints) {
@@ -322,6 +389,8 @@ export class DirectTransfer {
       this.reconnectUntil = 0;
       link.secured = true;
       this.state({ state: 'connected' });
+      if (this.options.name) this.sendJson(link, { t: 'hello', name: this.options.name }).catch(() => {});
+      this.flushTexts();
       this.pump();
       return;
     }
@@ -332,7 +401,7 @@ export class DirectTransfer {
     else if (frame[0] === KIND_DATA) this.onChunk(link, body);
   }
 
-  private async onControl(link: Link, message: { t: string; id?: string; files?: FileMeta[] }) {
+  private async onControl(link: Link, message: { t: string; id?: string; files?: FileMeta[]; name?: unknown; text?: unknown; at?: unknown }) {
     const id = String(message.id ?? '');
     if (message.t === 'files' && Array.isArray(message.files)) {
       if (link.incoming) this.handlers.onAborted?.(link.incoming.id, 'receive');
@@ -346,8 +415,15 @@ export class DirectTransfer {
       this.handlers.onReceived?.(id, files);
     } else if (message.t === 'got') {
       link.confirm.get(id)?.();
+      if (this.texts.delete(id)) this.handlers.onSent?.(id);
+    } else if (message.t === 'hello' && typeof message.name === 'string') {
+      this.handlers.onHello?.(message.name.slice(0, 60));
+    } else if (message.t === 'text' && typeof message.text === 'string' && id) {
+      await this.sendJson(link, { t: 'got', id });
+      this.handlers.onText?.(id, message.text, typeof message.at === 'number' ? message.at : Date.now());
     } else if (message.t === 'bye') {
-      this.state({ state: 'ended', message: 'The other device ended the session.' });
+      const idle = (message as { reason?: string }).reason === 'idle';
+      this.state({ state: 'ended', message: idle ? IDLE_MESSAGE : 'The other device ended the session.' });
       this.shutdown();
     }
   }
@@ -376,7 +452,15 @@ export class DirectTransfer {
     this.advance(link);
   }
 
-  private async sendFrame(link: Link, kind: number, payload: Uint8Array) {
+  /** Seal and send one frame, after every frame queued before it on this connection. */
+  private sendFrame(link: Link, kind: number, payload: Uint8Array): Promise<void> {
+    const run = link.out.then(() => this.writeFrame(link, kind, payload));
+    link.out = run.catch(() => {});
+    return run;
+  }
+
+  private async writeFrame(link: Link, kind: number, payload: Uint8Array) {
+    if (this.link !== link) throw new Error('disconnected');
     const plain = new Uint8Array(payload.length + 1);
     plain[0] = kind;
     plain.set(payload, 1);
@@ -407,6 +491,27 @@ export class DirectTransfer {
     this.outbox.push({ id, files });
     this.pump();
     return id;
+  }
+
+  /**
+   * Send a text message. It goes now if the devices are connected, otherwise
+   * as soon as they are, and again after a reconnect until the other device
+   * confirms it (`onSent` with the returned id).
+   */
+  sendText(text: string, id: string = crypto.randomUUID()): string {
+    this.texts.set(id, { text, at: Date.now() });
+    this.flushTexts();
+    return id;
+  }
+
+  private flushTexts() {
+    const link = this.link;
+    if (!link?.secured || this.ended) return;
+    for (const [id, { text, at }] of this.texts) {
+      if (link.textsSent.has(id)) continue;
+      link.textsSent.add(id);
+      this.sendJson(link, { t: 'text', id, text, at }).catch(() => {});
+    }
   }
 
   private async pump() {
@@ -454,11 +559,13 @@ export class DirectTransfer {
     link.confirm.delete(id);
   }
 
-  /** End the session for both devices; the QR code stops working. */
-  async end() {
+  /** End the session for both devices; the QR code stops working. `idle`: it timed out. */
+  async end(reason?: 'idle') {
     const link = this.link;
-    if (link?.secured) await this.sendJson(link, { t: 'bye' }).catch(() => {});
-    this.state({ state: 'ended', message: 'Session ended.' });
+    this.state({ state: 'ended', message: reason === 'idle' ? IDLE_MESSAGE : 'Session ended.' });
+    // From here on, the connection closing (the other side hanging up on `bye`) is not a drop to recover from.
+    this.ended = true;
+    if (link?.secured) await this.sendJson(link, { t: 'bye', reason }).catch(() => {});
     setTimeout(() => this.shutdown(), 200);
   }
 
@@ -467,6 +574,7 @@ export class DirectTransfer {
     clearTimeout(this.timer);
     this.ended = true;
     this.outbox = [];
+    this.texts.clear();
     this.link?.conn.close();
     this.link = null;
     this.peer?.destroy();

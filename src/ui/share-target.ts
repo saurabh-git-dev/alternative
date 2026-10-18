@@ -1,17 +1,17 @@
 /**
- * Where "share this" goes for a file: the Share page (QR code + link) when it
- * packs into one QR code, otherwise a direct, encrypted transfer (any size).
- * While a direct session is connected (ui/transfer.svelte.ts), files go over
- * it, whatever their size.
- * Used by tool results and by every IT tool's output.
+ * Where "Share" can send a file (see components/ShareMenu.svelte): a device
+ * connected over a direct transfer (any size), a new device by QR code, or,
+ * for small files, the Share page, which packs the file into a link and QR
+ * code (core/share.ts).
  */
 import type { FileData } from '../core/types';
-import { QR_ROUTE, appUrl, pack, qrCapacity } from '../core/share';
+import { MAX_LINK_CHARS, QR_ROUTE, appUrl, pack, qrCapacity } from '../core/share';
 import { handoff } from './handoff.svelte';
-import { isConnected } from './transfer.svelte';
 
 /** Biggest file that could still pack into one QR code; above it, skip the (costly) packing test. */
 const QR_PRECHECK_BYTES = 64 * 1024;
+/** Raw files above this can't make a usable link (base64 adds a third). */
+export const MAX_LINK_FILE_BYTES = Math.floor((MAX_LINK_CHARS * 3) / 4) - 1024;
 
 let room: number | undefined;
 
@@ -21,14 +21,16 @@ export function fitsQr(file: FileData): boolean {
   return file.bytes.length <= QR_PRECHECK_BYTES && pack(file).length <= room;
 }
 
-/** Open the right share page with this file loaded. While a device is connected, it goes straight to it. */
-export function shareFile(file: FileData, fits = fitsQr(file)): void {
-  handoff.file = file;
-  location.hash = fits && !isConnected() ? '#/share' : '#/direct';
+export function fitsLink(file: FileData): boolean {
+  return file.bytes.length <= MAX_LINK_FILE_BYTES;
 }
 
-/** Send several files to a phone in one direct session. */
-export function sendFiles(files: FileData[]): void {
-  handoff.files = files;
-  location.hash = '#/direct';
+export function toFile(file: FileData | File): File {
+  return file instanceof File ? file : new File([file.bytes as BlobPart], file.name, { type: file.type });
+}
+
+/** Open the Share page (link and QR code) with this file loaded. */
+export function openSharePage(file: FileData): void {
+  handoff.file = file;
+  location.hash = '#/share';
 }
