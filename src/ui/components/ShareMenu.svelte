@@ -9,8 +9,9 @@
   - "Other apps…": the system share sheet, where the browser has one.
   `files` can be a function, for results that are costly to load (e.g. a
   saved recording); they are then loaded on the first pick. With `text`
-  (an IT tool's output), a connected device gets it as a chat message it can
-  copy, rather than as a file.
+  (an IT tool's output), a connected device gets plain text as a chat
+  message it can copy; JSON, CSV and other formats still go as a file, so
+  they can be saved and opened in a tool there.
 -->
 <script lang="ts">
   import type { FileData } from '../../core/types';
@@ -59,7 +60,8 @@
   }
 
   async function toDevice(key: string) {
-    const id = text && text.length <= MAX_CHAT_TEXT ? sendText(key, text) : sendFiles(key, await resolve());
+    const asMessage = !!text && text.length <= MAX_CHAT_TEXT && (!single || single.type === 'text/plain');
+    const id = asMessage ? sendText(key, text!) : sendFiles(key, await resolve());
     if (id) hub.notice = { device: key, message: id };
     open = false;
   }

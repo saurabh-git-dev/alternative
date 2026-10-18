@@ -34,8 +34,9 @@
  * then says `done`; the receiver checks the sizes and confirms (`got`).
  * Each side sends one batch at a time, so bytes always belong to the batch
  * that side announced last; batches in the two directions can overlap.
- * Other control messages: `hello` (the device's display name, sent once
- * per connection), `text` (a chat message, confirmed with `got`, re-sent
+ * Other control messages: `hello` (the device's display name and kind,
+ * such as "Blue Otter" and "iPhone · Safari", sent on each connection and
+ * again after a rename), `text` (a chat message, confirmed with `got`, re-sent
  * after a reconnect until confirmed, so the receiver drops repeats by id)
  * and `bye` (end the session). Frames go out strictly in the order they
  * are sealed, because the receiver expects consecutive counter nonces.
@@ -83,7 +84,7 @@ export interface Handlers {
   /** A batch stopped part-way (the connection dropped). */
   onAborted?: (id: string, direction: 'send' | 'receive') => void;
   /** The other device said its name (once per connection). */
-  onHello?: (name: string) => void;
+  onHello?: (name: string, kind: string) => void;
   /** A text message arrived. The same id can arrive twice after a reconnect. */
   onText?: (id: string, text: string, at: number) => void;
 }
@@ -91,6 +92,8 @@ export interface Handlers {
 export interface TransferOptions {
   /** This device's display name, shown on the other device. */
   name?: string;
+  /** What kind of device and browser this is, e.g. "iPhone · Safari". */
+  kind?: string;
   /** Picking up a session after this page reloaded: keep trying to reconnect instead of failing. */
   resume?: boolean;
 }
@@ -114,7 +117,7 @@ const RECONNECT_EVERY_MS = 4_000;
 /** A reloaded host may find its ID still taken for a moment; how long it keeps asking for it. */
 const RECLAIM_FOR_MS = 30_000;
 
-const IDLE_MESSAGE = 'Closed after 5 minutes without activity.';
+const IDLE_MESSAGE = 'Closed after 15 minutes without activity.';
 
 const SERVER_SETTING = 'formatter-peer-server';
 
@@ -389,7 +392,7 @@ export class DirectTransfer {
       this.reconnectUntil = 0;
       link.secured = true;
       this.state({ state: 'connected' });
-      if (this.options.name) this.sendJson(link, { t: 'hello', name: this.options.name }).catch(() => {});
+      this.hello(link);
       this.flushTexts();
       this.pump();
       return;
@@ -401,7 +404,7 @@ export class DirectTransfer {
     else if (frame[0] === KIND_DATA) this.onChunk(link, body);
   }
 
-  private async onControl(link: Link, message: { t: string; id?: string; files?: FileMeta[]; name?: unknown; text?: unknown; at?: unknown }) {
+  private async onControl(link: Link, message: { t: string; id?: string; files?: FileMeta[]; name?: unknown; kind?: unknown; text?: unknown; at?: unknown }) {
     const id = String(message.id ?? '');
     if (message.t === 'files' && Array.isArray(message.files)) {
       if (link.incoming) this.handlers.onAborted?.(link.incoming.id, 'receive');
@@ -417,7 +420,7 @@ export class DirectTransfer {
       link.confirm.get(id)?.();
       if (this.texts.delete(id)) this.handlers.onSent?.(id);
     } else if (message.t === 'hello' && typeof message.name === 'string') {
-      this.handlers.onHello?.(message.name.slice(0, 60));
+      this.handlers.onHello?.(message.name.slice(0, 40), typeof message.kind === 'string' ? message.kind.slice(0, 60) : '');
     } else if (message.t === 'text' && typeof message.text === 'string' && id) {
       await this.sendJson(link, { t: 'got', id });
       this.handlers.onText?.(id, message.text, typeof message.at === 'number' ? message.at : Date.now());
@@ -491,6 +494,16 @@ export class DirectTransfer {
     this.outbox.push({ id, files });
     this.pump();
     return id;
+  }
+
+  private hello(link: Link) {
+    if (this.options.name) this.sendJson(link, { t: 'hello', name: this.options.name, kind: this.options.kind ?? '' }).catch(() => {});
+  }
+
+  /** Change this device's name; the other device hears it now if connected, or on connecting. */
+  rename(name: string) {
+    this.options.name = name;
+    if (this.link?.secured) this.hello(this.link);
   }
 
   /**

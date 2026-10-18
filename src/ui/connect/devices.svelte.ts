@@ -4,7 +4,7 @@
  * text sent each way. Kept outside any page, so connections stay open while
  * you use the tools; the header's Connect button shows how many are live.
  *
- * - A session closes after 5 minutes without anything sent or received
+ * - A session closes after 15 minutes without anything sent or received
  *   (`IDLE_MS`), on both devices. A QR code nobody scans expires the same way.
  * - Sessions survive a reload or a switch to another section (a different
  *   page of the same site): the invite is kept in sessionStorage (this tab
@@ -14,11 +14,12 @@
  */
 import { DirectTransfer, type ConnectionState, type Invite, type Progress } from '../../core/direct';
 import { fromB64url, toB64url } from '../../core/direct-crypto';
-import { deviceName } from '../../core/device';
+import { deviceName, randomDeviceName } from '../../core/device';
 import * as history from './history-db';
 
-export const IDLE_MS = 5 * 60_000;
+export const IDLE_MS = 15 * 60_000;
 const SAVE_KEY = 'tools-connect';
+const NAME_KEY = 'tools-device-name';
 
 export interface FileInfo {
   name: string;
@@ -49,6 +50,8 @@ export interface Device {
   conn: ConnectionState;
   /** The other device's name, once it has said it. */
   name: string;
+  /** The other device's kind, e.g. "iPhone · Safari". */
+  kind: string;
   /** Has connected at least once. A host that hasn't is a QR code waiting to be scanned. */
   paired: boolean;
   messages: Message[];
@@ -63,11 +66,42 @@ export const hub = $state<{
   viewing: string | null;
   /** The latest arrival (or a send started from a Share menu), for the corner notice. */
   notice: { device: string; message: string } | null;
+  /** A received text file open in the text editor (connect/TextEditor.svelte), and the device it came from. */
+  editing: { file: File; device?: string } | null;
+  /** This device's name, as other devices see it. */
+  me: string;
   /** Ticks every second, for countdowns. */
   now: number;
-}>({ devices: [], viewing: null, notice: null, now: Date.now() });
+}>({ devices: [], viewing: null, notice: null, editing: null, me: loadName(), now: Date.now() });
 
-const myName = deviceName();
+const myKind = deviceName();
+
+/** This browser's name: saved, or a new random one ("Blue Otter") saved for next time. */
+function loadName(): string {
+  try {
+    const saved = localStorage.getItem(NAME_KEY);
+    if (saved) return saved;
+    const name = randomDeviceName();
+    localStorage.setItem(NAME_KEY, name);
+    return name;
+  } catch {
+    return randomDeviceName();
+  }
+}
+
+/** Rename this device (or, with nothing, pick a new random name); connected devices see it at once. */
+export function setMyName(name?: string) {
+  const next = name?.trim().slice(0, 40) || randomDeviceName();
+  hub.me = next;
+  try {
+    localStorage.setItem(NAME_KEY, next);
+  } catch {
+    /* storage blocked: the name lasts for this page */
+  }
+  for (const d of hub.devices) if (isLive(d)) d.transfer.rename(next);
+}
+
+const me = () => ({ name: hub.me, kind: myKind });
 
 export const isLive = (d: Device) => d.conn.state !== 'ended' && d.conn.state !== 'failed';
 
@@ -100,7 +134,11 @@ export function secondsLeft(d: Device): number {
 }
 
 export function displayName(d: Device): string {
-  if (d.name) return d.name;
+  if (d.name) {
+    // Two devices with the same name (both renamed alike, or a random clash): tell them apart by kind.
+    const clash = d.name === hub.me || hub.devices.some((x) => x.key !== d.key && x.name === d.name && isLive(x));
+    return clash && d.kind ? `${d.name} (${d.kind})` : d.name;
+  }
   return d.transfer.role === 'host' ? 'Device that scanned your code' : 'Device that showed the code';
 }
 
@@ -178,10 +216,11 @@ function handlersFor(key: string) {
       m.status = direction === 'send' ? 'queued' : 'interrupted';
       if (direction === 'send') m.done = 0;
     },
-    onHello: (name: string) => {
+    onHello: (name: string, kind: string) => {
       const d = find();
       if (!d) return;
       d.name = name;
+      d.kind = kind;
       save();
     },
     onText: (id: string, text: string, at: number) => {
@@ -198,7 +237,7 @@ function add(make: (key: string) => DirectTransfer, init: Partial<Device> = {}):
   const key = init.key ?? crypto.randomUUID();
   // Its first state change ('starting') arrives before it is listed, which matches the initial state.
   const transfer = make(key);
-  hub.devices.push({ conn: { state: 'starting' }, name: '', paired: false, messages: [], unread: 0, lastActive: Date.now(), ...init, key, transfer });
+  hub.devices.push({ conn: { state: 'starting' }, name: '', kind: '', paired: false, messages: [], unread: 0, lastActive: Date.now(), ...init, key, transfer });
   return hub.devices.at(-1)!;
 }
 
@@ -207,7 +246,7 @@ function add(make: (key: string) => DirectTransfer, init: Partial<Device> = {}):
  * given here are sent as soon as that device connects.
  */
 export function newHost(files: File[] = []): Device {
-  const d = pendingHost() ?? add((key) => DirectTransfer.host(files.length > 0, handlersFor(key), { name: myName }));
+  const d = pendingHost() ?? add((key) => DirectTransfer.host(files.length > 0, handlersFor(key), me()));
   if (files.length) sendFiles(d.key, files);
   return d;
 }
@@ -215,7 +254,7 @@ export function newHost(files: File[] = []): Device {
 /** Connect to the device that showed this invite (or return that session if it is already open). */
 export function join(invite: Invite): Device {
   const existing = hub.devices.find((d) => d.transfer.invite.peerId === invite.peerId && isLive(d));
-  return existing ?? add((key) => DirectTransfer.join(invite, handlersFor(key), { name: myName }));
+  return existing ?? add((key) => DirectTransfer.join(invite, handlersFor(key), me()));
 }
 
 export function sendFiles(key: string, files: File[]): string | undefined {
@@ -273,6 +312,7 @@ interface Saved {
   peerId: string;
   secret: string;
   name: string;
+  kind?: string;
   lastActive: number;
   messages: Omit<Message, 'files' | 'current' | 'done'>[];
 }
@@ -285,6 +325,7 @@ function save() {
     peerId: d.transfer.invite.peerId,
     secret: toB64url(d.transfer.invite.secret),
     name: d.name,
+    kind: d.kind,
     lastActive: d.lastActive,
     messages: d.messages.map(({ id, dir, at, kind, text, meta, total, status }) => ({ id, dir, at, kind, text, meta, total, status })),
   }));
@@ -318,9 +359,9 @@ function restore() {
     const d = add(
       (key) =>
         s.role === 'host'
-          ? DirectTransfer.host(false, handlersFor(key), { name: myName, invite, resume: true })
-          : DirectTransfer.join(invite, handlersFor(key), { name: myName, resume: true }),
-      { key: s.key, name: s.name, paired: true, lastActive: s.lastActive, messages },
+          ? DirectTransfer.host(false, handlersFor(key), { ...me(), invite, resume: true })
+          : DirectTransfer.join(invite, handlersFor(key), { ...me(), resume: true }),
+      { key: s.key, name: s.name, kind: s.kind ?? '', paired: true, lastActive: s.lastActive, messages },
     );
     for (const m of d.messages) {
       if (m.kind !== 'files') continue;

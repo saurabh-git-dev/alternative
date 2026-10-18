@@ -1,19 +1,25 @@
 <!--
   "Edit" menu for a file: every tool that accepts its type (PDF, image and
-  video tools open right here with the file loaded; the direct-transfer
-  session stays connected), plus IT tools for text, which open in a new tab
-  with the text filled in.
+  video tools open right here with the file loaded; connected devices stay
+  connected). Text files (JSON, CSV, YAML, text…) can also be edited right
+  here (connect/TextEditor.svelte) and, when they came from a connected
+  device (`device`), sent straight back to it; or opened in a matching IT
+  tool, whose Share menu sends the result back. IT tools are another section
+  of the site, so they open in this tab, where the connection picks up again.
 -->
 <script lang="ts">
   import { ALL_ACTIONS } from '../../actions';
   import { accepts, detectType } from '../../core/files';
   import { suggestItTools, type Suggestion } from '../../it/suggest';
   import { itToolHref } from '../section';
+  import { hub } from '../connect/devices.svelte';
 
-  let { file, onOpen }: { file: File; onOpen: (id: string, files: File[]) => void } = $props();
+  let { file, onOpen, device }: { file: File; onOpen: (id: string, files: File[]) => void; device?: string } = $props();
 
   /** Text up to this size is offered to the IT tools (it travels in their link). */
   const MAX_IT_TEXT = 200_000;
+  /** Text up to this size opens in the text editor. */
+  const MAX_EDIT_TEXT = 5_000_000;
 
   let menu = $state<HTMLDetailsElement>();
   let panel = $state<HTMLDivElement>();
@@ -70,14 +76,17 @@
   <details class="menu" bind:this={menu} ontoggle={onToggle}>
     <summary class="btn" title="Open this file in a tool">✏️ Edit</summary>
     <div class="panel card" role="menu" bind:this={panel} style:top="{pos.top}px" style:left="{pos.left}px" style:visibility={placed ? 'visible' : 'hidden'}>
+      {#if isText && file.size <= MAX_EDIT_TEXT}
+        <button role="menuitem" onclick={() => ((hub.editing = { file, device }), menu && (menu.open = false))}><span aria-hidden="true">📝</span> Edit text here</button>
+      {/if}
       {#each tools as tool (tool.id)}
         <button role="menuitem" onclick={() => onOpen(tool.id, [file])}><span aria-hidden="true">{tool.icon}</span> {tool.title}</button>
       {/each}
       {#each itTools as s (s.tool)}
-        <a role="menuitem" href={itToolHref(s.tool, { input: text, options: s.options ?? {} })} target="_blank" rel="noopener">{s.label} <span class="muted">↗</span></a>
+        <a role="menuitem" href={itToolHref(s.tool, { input: text, options: s.options ?? {} })}>{s.label}</a>
       {/each}
-      {#if !tools.length && !itTools.length}
-        <p class="muted">{file.size > MAX_IT_TEXT ? 'Too large to open in the text tools.' : 'No tools for this kind of file.'}</p>
+      {#if !tools.length && !itTools.length && !(isText && file.size <= MAX_EDIT_TEXT)}
+        <p class="muted">{isText ? 'Too large to edit here.' : 'No tools for this kind of file.'}</p>
       {/if}
     </div>
   </details>

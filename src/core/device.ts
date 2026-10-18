@@ -42,9 +42,18 @@ export function pixelBudget(desktop: number, info = deviceInfo()): number {
   return Math.min(desktop, info.memoryGB !== undefined && info.memoryGB >= 6 ? 32_000_000 : 16_000_000);
 }
 
+const ADJECTIVES = ['Amber', 'Blue', 'Bright', 'Calm', 'Coral', 'Cosmic', 'Crimson', 'Golden', 'Green', 'Happy', 'Indigo', 'Jade', 'Lucky', 'Mint', 'Misty', 'Olive', 'Quiet', 'Rapid', 'Rosy', 'Ruby', 'Silver', 'Sunny', 'Swift', 'Teal', 'Violet', 'Witty'];
+const ANIMALS = ['Badger', 'Bear', 'Crane', 'Dolphin', 'Eagle', 'Falcon', 'Finch', 'Fox', 'Gecko', 'Hare', 'Heron', 'Koala', 'Lemur', 'Lion', 'Lynx', 'Otter', 'Owl', 'Panda', 'Puffin', 'Raven', 'Robin', 'Seal', 'Tiger', 'Turtle', 'Whale', 'Wolf'];
+
+/** A friendly random name such as "Blue Otter", for telling connected devices apart (676 combinations). */
+export function randomDeviceName(random: () => number = Math.random): string {
+  const pick = (list: string[]) => list[Math.floor(random() * list.length)];
+  return `${pick(ADJECTIVES)} ${pick(ANIMALS)}`;
+}
+
 /**
  * A short, human name for this device and browser, such as "iPhone · Safari"
- * or "Windows · Edge", shown on the other device during a direct transfer.
+ * or "Windows · Edge", shown under the device's name on the other device.
  */
 export function deviceName(ua = typeof navigator === 'undefined' ? '' : navigator.userAgent, touch = typeof navigator === 'undefined' ? 0 : navigator.maxTouchPoints): string {
   const device = /iPhone/.test(ua)

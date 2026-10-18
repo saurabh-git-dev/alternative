@@ -18,6 +18,7 @@
   import QrCode from '../components/QrCode.svelte';
   import QrScanner from '../components/QrScanner.svelte';
   import Chat from './Chat.svelte';
+  import MyName from './MyName.svelte';
   import { displayName, getDevice, hub, isLive, join, listedDevices, newHost, pendingHost, secondsLeft } from './devices.svelte';
 
   let { hash, onOpen }: { hash: string; onOpen: (id: string, files: File[]) => void } = $props();
@@ -78,13 +79,15 @@
   </div>
 </div>
 
+<MyName />
+
 <div class="layout" class:solo={!devices.length}>
   {#if devices.length}
     <nav class="devices card" aria-label="Devices">
       {#each devices as d (d.key)}
         <button class="device" class:active={selected === d.key} onclick={() => (selected = d.key)}>
           <span class="dot {d.conn.state}" aria-hidden="true"></span>
-          <span class="dname">{displayName(d)}</span>
+          <span class="dname">{displayName(d)}{#if d.kind}<small class="muted">{d.kind}</small>{/if}</span>
           {#if d.unread}<span class="unread" aria-label="{d.unread} new">{d.unread}</span>{/if}
           {#if !isLive(d)}<span class="muted small">Ended</span>{/if}
         </button>
@@ -137,7 +140,7 @@
   <p>A free public matchmaker introduces the two browsers, then they talk directly. The matchmaker never sees your files, messages or the key.</p>
   <p>Each time the devices connect, both prove they hold the key from the QR code, so no one can pose as the other device. Everything is then encrypted with AES-256, using fresh keys per connection, on top of the connection's own encryption.</p>
   <p>On strict networks (some mobile data and office Wi-Fi) the encrypted bytes pass through a relay that can't read them.</p>
-  <p>The connection closes after 5 minutes without anything sent, or when you press End. Nothing is stored after that: the chat history lives only in this tab while the connection is open.</p>
+  <p>The connection closes after 15 minutes without anything sent, or when you press End. Nothing is stored after that: the chat history lives only in this tab while the connection is open.</p>
 </details>
 
 <style>
@@ -206,6 +209,13 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 550;
+  }
+  .dname small {
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .add .dname {
     font-weight: 500;
