@@ -77,11 +77,21 @@ as it likes.
   sessionStorage (this tab only) and both sides reconnect by themselves. Chat
   text is kept with it, files in IndexedDB (`connect/history-db.ts`), and all
   of it is deleted when the session ends.
-- A session closes on both devices after **5 minutes without anything sent
+- A session closes on both devices after **15 minutes without anything sent
   or received**; the chat shows the countdown. A QR code nobody scans expires
   the same way. **End** closes it at once.
-- Each device says its name (`deviceName()` in `src/core/device.ts`, such as
-  "iPhone · Safari") once per connection.
+- Each browser gets a random name such as "Blue Otter" (`randomDeviceName()`
+  in `src/core/device.ts`), kept in localStorage; **Rename** and **New random
+  name** on the Connect page change it (`connect/MyName.svelte`), and
+  connected devices see the change at once. The device kind ("iPhone ·
+  Safari", `deviceName()`) shows beside it and tells apart two devices with
+  the same name.
+- Received text files (JSON, CSV, YAML, text…) have **Edit text here** in
+  their Edit menu (`connect/TextEditor.svelte`): edit in place (JSON gets a
+  validity check, Format and Minify), then **Send back** to the device it
+  came from, or save it. Matching IT tools open in the same tab, where the
+  connection picks up again, and their Share menu sends the result back:
+  plain text as a chat message, JSON, CSV and other formats as a file.
 
 The QR code holds `<app>#/d/<id>.<secret>.<s|r>`: a random peer ID, a
 128-bit secret and which side started with files. A free public matchmaker

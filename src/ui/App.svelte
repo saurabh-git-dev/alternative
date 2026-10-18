@@ -23,6 +23,7 @@
   import Compare from './pages/Compare.svelte';
   import ConnectPage from './connect/ConnectPage.svelte';
   import Notice from './connect/Notice.svelte';
+  import TextEditor from './connect/TextEditor.svelte';
   import ItHome from './it/ItHome.svelte';
   import ItTool from './it/ItTool.svelte';
   import VideoHome from './video/VideoHome.svelte';
@@ -33,7 +34,7 @@
   import { LINK_ROUTE, QR_ROUTE } from '../core/share';
   import { DIRECT_ROUTE } from '../core/direct';
   import { getAction } from '../actions';
-  import { connectedCount, liveDevices } from './connect/devices.svelte';
+  import { connectedCount, hub, liveDevices } from './connect/devices.svelte';
   import { loadTheme, saveTheme, type Theme } from './settings';
   import { canInstall, install } from '../pwa/install.svelte';
 
@@ -215,6 +216,11 @@
 </main>
 
 <Notice onOpen={openTool} />
+{#if hub.editing}
+  {#key hub.editing.file}
+    <TextEditor file={hub.editing.file} device={hub.editing.device} />
+  {/key}
+{/if}
 
 <footer class="muted">
   {#if section === 'it'}

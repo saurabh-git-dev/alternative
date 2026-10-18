@@ -70,7 +70,7 @@
       </p>
       <div class="actions">
         {#if files.length === 1}
-          <EditMenu file={files[0]} onOpen={(id, f) => (close(), onOpen(id, f))} />
+          <EditMenu file={files[0]} device={device.key} onOpen={(id, f) => (close(), onOpen(id, f))} />
           <button class="btn" onclick={() => download(files[0], files[0].name)}>⬇ Download</button>
         {/if}
         <a class="btn" href="#/connect/{device.key}">Open chat</a>

@@ -83,3 +83,11 @@ describe('device names', () => {
     expect(deviceName('Mozilla/5.0 (Macintosh; Intel Mac OS X 14.0; rv:121.0) Gecko/20100101 Firefox/121.0', 0)).toBe('Mac · Firefox');
   });
 });
+
+describe('random device names', () => {
+  it('makes a two-word name from the word lists', async () => {
+    const { randomDeviceName } = await import('../src/core/device');
+    expect(randomDeviceName(() => 0)).toBe('Amber Badger');
+    expect(randomDeviceName(() => 0.999)).toMatch(/^\w+ \w+$/);
+  });
+});

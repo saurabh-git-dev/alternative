@@ -114,7 +114,7 @@
   <header>
     <span class="dot {device.conn.state}" aria-hidden="true"></span>
     <div class="who">
-      <strong>{displayName(device)}</strong>
+      <strong>{displayName(device)}{#if device.kind}<span class="kind"> · {device.kind}</span>{/if}</strong>
       <span class="muted small">
         {#if device.conn.state === 'connected'}
           🔒 Connected · closes in {clock} if idle
@@ -174,7 +174,7 @@
               </div>
               {#if file && (m.dir === 'in' || m.status === 'complete')}
                 <div class="actions">
-                  <EditMenu {file} {onOpen} />
+                  <EditMenu {file} {onOpen} device={m.dir === 'in' ? device.key : undefined} />
                   {#if canShare([file])}<button class="btn" onclick={() => navigator.share({ files: [file] }).catch(() => {})}>Save…</button>{/if}
                   <button class="btn" onclick={() => download(file, file.name)}>⬇ Download</button>
                 </div>
@@ -239,6 +239,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .kind {
+    font-weight: 400;
+    color: var(--text-3);
   }
   .dot {
     flex: none;
