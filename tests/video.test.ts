@@ -138,6 +138,7 @@ describe('sections', () => {
     expect(sectionOf('/alternative/video/')).toBe('video');
     expect(sectionOf('/record/index.html')).toBe('record');
     expect(sectionOf('/alternative/it/')).toBe('it');
+    expect(sectionOf('/alternative/chat/')).toBe('chat');
   });
   it('links between sections relatively', () => {
     expect(sectionHref('video', '#/', 'files')).toBe('video/');

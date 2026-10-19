@@ -12,6 +12,10 @@
   home; in `it/`, `#/<tool id>[/<state>]` opens an IT tool (see
   it/registry.ts), and `#/tool/<video tool>/recording/<id>` opens a video
   tool with a saved recording loaded. Every other route works everywhere.
+
+  `chat/` is unlisted (no link to it anywhere): its home page, and its
+  `#/connect…` routes, are Connect with voice and video calls (see
+  connect/calls.svelte.ts).
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
@@ -24,6 +28,8 @@
   import ConnectPage from './connect/ConnectPage.svelte';
   import Notice from './connect/Notice.svelte';
   import TextEditor from './connect/TextEditor.svelte';
+  import CallPanel from './connect/CallPanel.svelte';
+  import { enableCalls } from './connect/calls.svelte';
   import ItHome from './it/ItHome.svelte';
   import ItTool from './it/ItTool.svelte';
   import VideoHome from './video/VideoHome.svelte';
@@ -39,6 +45,7 @@
   import { canInstall, install } from '../pwa/install.svelte';
 
   let hash = $state(location.hash);
+  if (section === 'chat') enableCalls();
   let theme = $state<Theme>(loadTheme());
   /** Files dropped on the home page, handed to the tool the user picks. */
   let pending = $state<File[]>([]);
@@ -87,7 +94,7 @@
           ? 'share'
           : hash === '#/connect' || hash.startsWith('#/connect/') || hash === '#/scan' || hash.startsWith('#/direct') || hash.startsWith(`#${DIRECT_ROUTE}`)
           ? 'connect'
-          : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : `${section}-home`,
+          : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : section === 'chat' ? 'connect' : `${section}-home`,
   );
 
   const HOME_TITLES: Record<Section, string> = {
@@ -95,6 +102,7 @@
     video: 'Video tools',
     record: 'Screen recorder',
     it: 'IT tools',
+    chat: 'Chat',
   };
 
   $effect(() => {
@@ -111,7 +119,7 @@
         : page === 'share'
         ? 'Share as link or QR · Tools'
         : page === 'connect'
-        ? 'Connect devices · Tools'
+        ? section === 'chat' ? 'Chat' : 'Connect devices · Tools'
         : 'Shared file · Tools';
   });
 
@@ -206,7 +214,7 @@
     <Share />
   {:else if page === 'connect'}
     {#key hash}
-      <ConnectPage {hash} onOpen={openTool} />
+      <ConnectPage {hash} onOpen={openTool} calls={section === 'chat'} />
     {/key}
   {:else if page === 'received'}
     <Received {hash} onOpen={openTool} />
@@ -216,6 +224,7 @@
 </main>
 
 <Notice onOpen={openTool} />
+{#if section === 'chat'}<CallPanel />{/if}
 {#if hub.editing}
   {#key hub.editing.file}
     <TextEditor file={hub.editing.file} device={hub.editing.device} />
@@ -227,6 +236,8 @@
     Open source, AGPL-3.0. Every tool runs in your browser; nothing you type is sent anywhere.
   {:else if section === 'video'}
     Open source, AGPL-3.0. Powered by WebCodecs (via Mediabunny), ffmpeg.wasm and gifenc.
+  {:else if section === 'chat'}
+    Open source, AGPL-3.0. Chat and calls go straight between your devices, end-to-end encrypted.
   {:else if section === 'record'}
     Open source, AGPL-3.0. Recorded with your browser's MediaRecorder and kept in its own storage.
   {:else}
