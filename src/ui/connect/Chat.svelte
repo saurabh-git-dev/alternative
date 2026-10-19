@@ -2,15 +2,17 @@
   Chat with one connected device: text and files, either way, in the order
   they were sent. Received files preview in place and open in any tool
   that takes them (Edit). Type and press Enter to send text; attach, drop or
-  paste files to send them.
+  paste files to send them. With `calls` (the chat/ page), the header also
+  has voice and video call buttons, and calls show as lines in the chat.
 -->
 <script lang="ts">
   import { download, formatBytes } from '../../core/files';
   import FilePreview from '../components/FilePreview.svelte';
   import EditMenu from '../components/EditMenu.svelte';
+  import { calls as callState, startCall } from './calls.svelte';
   import { displayName, endDevice, forget, hub, isLive, markRead, resend, secondsLeft, sendFiles, sendText, type Device, type Message } from './devices.svelte';
 
-  let { device, onOpen }: { device: Device; onOpen: (id: string, files: File[]) => void } = $props();
+  let { device, onOpen, calls = false }: { device: Device; onOpen: (id: string, files: File[]) => void; calls?: boolean } = $props();
 
   let draft = $state('');
   let dragging = $state(false);
@@ -127,6 +129,11 @@
         {/if}
       </span>
     </div>
+    {#if calls && live}
+      {@const busy = !!callState.current || device.conn.state !== 'connected'}
+      <button class="btn call-btn" disabled={busy} onclick={() => startCall(device.key, false)} title="Voice call" aria-label="Voice call">📞</button>
+      <button class="btn call-btn" disabled={busy} onclick={() => startCall(device.key, true)} title="Video call" aria-label="Video call">🎥</button>
+    {/if}
     {#if live}
       <button class="btn" onclick={() => endDevice(device.key)}>End</button>
     {:else}
@@ -141,6 +148,9 @@
       </p>
     {/if}
     {#each device.messages as m (m.id)}
+      {#if m.kind === 'call'}
+        {#if calls}<p class="call-line muted">{m.text} · {time(m.at)}</p>{/if}
+      {:else}
       <div class="msg {m.dir}">
         <div class="bubble">
           {#if m.kind === 'text'}
@@ -192,6 +202,7 @@
           {/if}
         </div>
       </div>
+      {/if}
     {/each}
   </div>
 
@@ -257,6 +268,14 @@
   .dot.ended,
   .dot.failed {
     background: var(--text-3);
+  }
+  .call-btn {
+    padding: 6px 10px;
+  }
+  .call-line {
+    margin: 0;
+    align-self: center;
+    font-size: 13px;
   }
   .messages {
     overflow-y: auto;

@@ -38,7 +38,8 @@
  * such as "Blue Otter" and "iPhone · Safari", sent on each connection and
  * again after a rename), `text` (a chat message, confirmed with `got`, re-sent
  * after a reconnect until confirmed, so the receiver drops repeats by id)
- * and `bye` (end the session). Frames go out strictly in the order they
+ * `sig` (call signalling, passed to `onSignal` as is; see core/call.ts) and
+ * `bye` (end the session). Frames go out strictly in the order they
  * are sealed, because the receiver expects consecutive counter nonces.
  */
 import type { DataConnection, Peer, PeerOptions } from 'peerjs';
@@ -87,6 +88,8 @@ export interface Handlers {
   onHello?: (name: string, kind: string) => void;
   /** A text message arrived. The same id can arrive twice after a reconnect. */
   onText?: (id: string, text: string, at: number) => void;
+  /** Call signalling from the other device (see core/call.ts). */
+  onSignal?: (data: unknown) => void;
 }
 
 export interface TransferOptions {
@@ -404,7 +407,7 @@ export class DirectTransfer {
     else if (frame[0] === KIND_DATA) this.onChunk(link, body);
   }
 
-  private async onControl(link: Link, message: { t: string; id?: string; files?: FileMeta[]; name?: unknown; kind?: unknown; text?: unknown; at?: unknown }) {
+  private async onControl(link: Link, message: { t: string; id?: string; files?: FileMeta[]; name?: unknown; kind?: unknown; text?: unknown; at?: unknown; d?: unknown }) {
     const id = String(message.id ?? '');
     if (message.t === 'files' && Array.isArray(message.files)) {
       if (link.incoming) this.handlers.onAborted?.(link.incoming.id, 'receive');
@@ -424,6 +427,8 @@ export class DirectTransfer {
     } else if (message.t === 'text' && typeof message.text === 'string' && id) {
       await this.sendJson(link, { t: 'got', id });
       this.handlers.onText?.(id, message.text, typeof message.at === 'number' ? message.at : Date.now());
+    } else if (message.t === 'sig') {
+      this.handlers.onSignal?.(message.d);
     } else if (message.t === 'bye') {
       const idle = (message as { reason?: string }).reason === 'idle';
       this.state({ state: 'ended', message: idle ? IDLE_MESSAGE : 'The other device ended the session.' });
@@ -494,6 +499,23 @@ export class DirectTransfer {
     this.outbox.push({ id, files });
     this.pump();
     return id;
+  }
+
+  /**
+   * The connection to the other device, once both proved they hold the
+   * secret. Calls add their audio and video to it, so they are covered by
+   * the same security check (see core/call.ts). A reconnect makes a new one.
+   */
+  get peerConnection(): RTCPeerConnection | null {
+    return this.link?.secured ? (this.link.conn.peerConnection ?? null) : null;
+  }
+
+  /** Send call signalling to the other device now; false if not connected. */
+  signal(data: object): boolean {
+    const link = this.link;
+    if (!link?.secured || this.ended) return false;
+    this.sendJson(link, { t: 'sig', d: data }).catch(() => {});
+    return true;
   }
 
   private hello(link: Link) {

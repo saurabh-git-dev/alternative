@@ -9,6 +9,8 @@
     `#/connect/new`, `#/connect/scan`, `#/connect/<device>` (that chat), and
     `#/d/<invite>`, the link inside a QR code, which joins and then moves to
     `#/connect/<device>` so the key doesn't stay in the address bar or history.
+  - With `calls` (the hidden chat/ page, where this is also the home page),
+    it's titled Chat and each chat can make voice and video calls.
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
@@ -21,7 +23,7 @@
   import MyName from './MyName.svelte';
   import { displayName, getDevice, hub, isLive, join, listedDevices, newHost, pendingHost, secondsLeft } from './devices.svelte';
 
-  let { hash, onOpen }: { hash: string; onOpen: (id: string, files: File[]) => void } = $props();
+  let { hash, onOpen, calls = false }: { hash: string; onOpen: (id: string, files: File[]) => void; calls?: boolean } = $props();
 
   const route = untrack(() => hash);
   const invite = parseInvite(route);
@@ -72,10 +74,15 @@
 </script>
 
 <div class="head">
-  <span class="icon" aria-hidden="true">🔗</span>
+  <span class="icon" aria-hidden="true">{calls ? '💬' : '🔗'}</span>
   <div>
-    <h1>Connect devices</h1>
-    <p class="muted">Send text and files of any size between this browser and your phone or another computer. Straight between the devices, end-to-end encrypted, nothing uploaded.</p>
+    {#if calls}
+      <h1>Chat</h1>
+      <p class="muted">Chat, send files of any size, and make voice and video calls with your phone or another computer. Straight between the devices, end-to-end encrypted, nothing uploaded.</p>
+    {:else}
+      <h1>Connect devices</h1>
+      <p class="muted">Send text and files of any size between this browser and your phone or another computer. Straight between the devices, end-to-end encrypted, nothing uploaded.</p>
+    {/if}
   </div>
 </div>
 
@@ -98,7 +105,7 @@
 
   {#if current && !showingNew}
     {#key current.key}
-      <Chat device={current} {onOpen} />
+      <Chat device={current} {onOpen} {calls} />
     {/key}
   {:else}
     <section class="card connect">
@@ -140,6 +147,9 @@
   <p>A free public matchmaker introduces the two browsers, then they talk directly. The matchmaker never sees your files, messages or the key.</p>
   <p>Each time the devices connect, both prove they hold the key from the QR code, so no one can pose as the other device. Everything is then encrypted with AES-256, using fresh keys per connection, on top of the connection's own encryption.</p>
   <p>On strict networks (some mobile data and office Wi-Fi) the encrypted bytes pass through a relay that can't read them.</p>
+  {#if calls}
+    <p>Calls go over the same checked connection, so their sound and video are as private as the chat. A call counts as activity, so the connection stays open while you talk.</p>
+  {/if}
   <p>The connection closes after 15 minutes without anything sent, or when you press End. Nothing is stored after that: the chat history lives only in this tab while the connection is open.</p>
 </details>
 

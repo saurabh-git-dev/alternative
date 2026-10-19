@@ -11,11 +11,14 @@
  *   only, gone when it closes) and both sides reconnect by themselves. Chat
  *   text is kept with it; files are kept in IndexedDB (connect/history-db.ts)
  *   until the session ends.
+ * - Calls (the hidden `chat/` page only, see connect/calls.svelte.ts) plug in
+ *   with `listenForCalls`; elsewhere a ringing call is turned down.
  */
 import { DirectTransfer, type ConnectionState, type Invite, type Progress } from '../../core/direct';
 import { fromB64url, toB64url } from '../../core/direct-crypto';
 import { deviceName, randomDeviceName } from '../../core/device';
 import * as history from './history-db';
+import { parseSignal } from '../../core/call';
 
 export const IDLE_MS = 15 * 60_000;
 const SAVE_KEY = 'tools-connect';
@@ -31,7 +34,8 @@ export interface Message {
   id: string;
   dir: 'in' | 'out';
   at: number;
-  kind: 'text' | 'files';
+  /** `call`: a line in the chat about a call (its text says what happened). */
+  kind: 'text' | 'files' | 'call';
   text?: string;
   /** The files, once they are here (received, or loaded back after a reload). */
   files: File[];
@@ -146,6 +150,39 @@ function touch(d: Device) {
   d.lastActive = Date.now();
 }
 
+/** Count as activity, so the session doesn't close as idle (e.g. during a call). */
+export function touchDevice(key: string) {
+  const d = getDevice(key);
+  if (d) touch(d);
+}
+
+export interface CallListener {
+  /** Call signalling from a device. */
+  signal: (key: string, data: unknown) => void;
+  /** A device's connection changed (a call on it can't outlive a drop). */
+  state: (key: string, state: ConnectionState) => void;
+}
+
+let calls: CallListener | null = null;
+
+/** Take calls on this page. Without a listener, a device that rings hears this page can't answer. */
+export function listenForCalls(listener: CallListener) {
+  calls = listener;
+}
+
+/** Send call signalling to a device now; false if it isn't connected. */
+export function signalDevice(key: string, data: object): boolean {
+  return getDevice(key)?.transfer.signal(data) ?? false;
+}
+
+/** Add a line about a call to a device's chat. */
+export function logCall(key: string, dir: 'in' | 'out', text: string) {
+  const d = getDevice(key);
+  if (!d) return;
+  d.messages.push({ id: crypto.randomUUID(), dir, at: Date.now(), kind: 'call', text, files: [], meta: [], done: 0, total: 0, status: 'complete', current: '' });
+  save();
+}
+
 function fileInfo(files: File[]): FileInfo[] {
   return files.map((f) => ({ name: f.name, type: f.type, size: f.size }));
 }
@@ -164,6 +201,7 @@ function handlersFor(key: string) {
       const d = find();
       if (!d) return;
       d.conn = s;
+      calls?.state(key, s);
       if (s.state === 'connected' && !d.paired) {
         d.paired = true;
         touch(d);
@@ -229,6 +267,11 @@ function handlersFor(key: string) {
       d.messages.push({ id, dir: 'in', at, kind: 'text', text, files: [], meta: [], done: 0, total: 0, status: 'complete', current: '' });
       arrived(d, d.messages.at(-1)!);
       save();
+    },
+    onSignal: (data: unknown) => {
+      if (calls) return calls.signal(key, data);
+      const signal = parseSignal(data);
+      if (signal?.c === 'ring') signalDevice(key, { c: 'decline', id: signal.id, reason: 'unavailable' });
     },
   };
 }

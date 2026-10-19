@@ -5,16 +5,19 @@
  * vite.config.ts). Hash routes work the same in every section, so sharing,
  * transfers, scanning and any tool page are available everywhere; only the
  * home page, header and titles differ.
+ *
+ * `chat/` is a fifth, unlisted section: Connect with voice and video calls
+ * (see connect/calls.svelte.ts). Nothing links to it; you open it by address.
  */
 import { encodeToolState, type ToolState } from '../it/links';
 
-export type Section = 'files' | 'video' | 'record' | 'it';
+export type Section = 'files' | 'video' | 'record' | 'it' | 'chat';
 
 /** Folder of each section below the site root ('' is the root). */
-const FOLDERS: Record<Section, string> = { files: '', video: 'video/', record: 'record/', it: 'it/' };
+const FOLDERS: Record<Section, string> = { files: '', video: 'video/', record: 'record/', it: 'it/', chat: 'chat/' };
 
 export function sectionOf(pathname: string): Section {
-  const m = /\/(it|video|record)\/(index\.html)?$/.exec(pathname);
+  const m = /\/(it|video|record|chat)\/(index\.html)?$/.exec(pathname);
   return (m?.[1] as Section | undefined) ?? 'files';
 }
 
