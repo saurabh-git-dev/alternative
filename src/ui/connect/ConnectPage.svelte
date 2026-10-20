@@ -21,6 +21,7 @@
   import QrScanner from '../components/QrScanner.svelte';
   import Chat from './Chat.svelte';
   import MyName from './MyName.svelte';
+  import { chatLink, setChatLink } from '../chat-link.svelte';
   import { displayName, getDevice, hub, isLive, join, listedDevices, newHost, pendingHost, secondsLeft } from './devices.svelte';
 
   let { hash, onOpen, calls = false }: { hash: string; onOpen: (id: string, files: File[]) => void; calls?: boolean } = $props();
@@ -87,6 +88,12 @@
 </div>
 
 <MyName />
+{#if calls}
+  <label class="menu-link muted small">
+    <input type="checkbox" checked={chatLink.shown} onchange={(e) => setChatLink(e.currentTarget.checked)} />
+    Show Chat in the menu on every page (in this browser only)
+  </label>
+{/if}
 
 <div class="layout" class:solo={!devices.length}>
   {#if devices.length}
@@ -326,6 +333,13 @@
   }
   .small {
     font-size: 13px;
+  }
+  .menu-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: -6px 0 14px;
+    cursor: pointer;
   }
   .how {
     max-width: 760px;

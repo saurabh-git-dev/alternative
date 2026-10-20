@@ -7,7 +7,7 @@
 <script lang="ts">
   import { formatDuration } from '../../core/call';
   import { displayName, getDevice, hub } from './devices.svelte';
-  import { accept, calls, decline, flipCamera, hangup, toggleCam, toggleMic } from './calls.svelte';
+  import { accept, calls, decline, flipCamera, hangup, hardware, toggleCam, toggleMic } from './calls.svelte';
 
   const call = $derived(calls.current);
   const device = $derived(call ? getDevice(call.device) : undefined);
@@ -39,12 +39,15 @@
         <span class="muted small">
           {call.dir === 'in' ? `Incoming ${call.video ? 'video' : 'voice'} call…` : `Calling (${call.video ? 'video' : 'voice'})…`}
         </span>
+        {#if call.dir === 'in' && !hardware.mic && !hardware.cam}
+          <span class="muted small">No microphone or camera found, so this device can't answer.</span>
+        {/if}
       </div>
       {#if call.dir === 'in'}
         <div class="buttons">
           <button class="round decline" onclick={decline} aria-label="Decline" title="Decline">✕</button>
-          <button class="round accept" onclick={() => accept(false)} aria-label="Answer with voice" title="Answer with voice">📞</button>
-          <button class="round accept" onclick={() => accept(true)} aria-label="Answer with video" title="Answer with video">🎥</button>
+          <button class="round accept" disabled={!hardware.mic} onclick={() => accept(false)} aria-label="Answer with voice" title={hardware.mic ? 'Answer with voice' : 'No microphone found'}>📞</button>
+          <button class="round accept" disabled={!hardware.cam} onclick={() => accept(true)} aria-label="Answer with video" title={hardware.cam ? 'Answer with video' : 'No camera found'}>🎥</button>
         </div>
       {:else}
         <div class="buttons">
@@ -76,10 +79,10 @@
         </button>
       </div>
       <div class="controls">
-        <button class="round" class:off={!call.mic} onclick={toggleMic} aria-pressed={!call.mic} title={call.mic ? 'Mute' : 'Unmute'}>
+        <button class="round" class:off={!call.mic} disabled={!call.local?.getAudioTracks().length} onclick={toggleMic} aria-pressed={!call.mic} title={!call.local?.getAudioTracks().length ? 'No microphone' : call.mic ? 'Mute' : 'Unmute'}>
           {call.mic ? '🎙️' : '🔇'}
         </button>
-        <button class="round" class:off={!call.cam} onclick={toggleCam} aria-pressed={!call.cam} title={call.cam ? 'Turn camera off' : 'Turn camera on'}>
+        <button class="round" class:off={!call.cam} disabled={!call.cam && !hardware.cam} onclick={toggleCam} aria-pressed={!call.cam} title={call.cam ? 'Turn camera off' : 'Turn camera on'}>
           {call.cam ? '📹' : '🚫'}
         </button>
         {#if canFlip && call.cam}
@@ -179,6 +182,10 @@
   .round.off {
     background: #fff;
     color: #111;
+  }
+  .round:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
   .ring .round.accept {
     background: #16a34a;

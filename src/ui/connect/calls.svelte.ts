@@ -9,6 +9,9 @@
  *   connection drops (a reconnect is a new connection, so call again).
  * - Each call leaves a line in that device's chat: how long it lasted, or
  *   that it was missed or declined.
+ * - A voice call needs a microphone; a video call needs a camera, and uses
+ *   the microphone too if there is one. Buttons for calls this device can't
+ *   make (or answer) are turned off.
  */
 import { CallMedia, explainMediaError, formatDuration, parseSignal, type Signal } from '../../core/call';
 import type { ConnectionState } from '../../core/direct';
@@ -54,17 +57,39 @@ let ringer: { stop: () => void } | null = null;
 const kindOf = (call: Call) => (call.video ? 'video call' : 'voice call');
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
-function getMedia(video: boolean, back = false): Promise<MediaStream> {
-  if (!navigator.mediaDevices?.getUserMedia) return Promise.reject(new Error('This browser can only make calls on a secure (https) page.'));
-  return navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true },
-    video: video ? { facingMode: back ? 'environment' : 'user', width: { ideal: 1280 }, height: { ideal: 720 } } : false,
-  });
+/** Whether this device has a microphone and a camera (assumed until checked). */
+export const hardware = $state({ mic: true, cam: true });
+
+async function checkDevices() {
+  try {
+    const list = await navigator.mediaDevices.enumerateDevices();
+    hardware.mic = list.some((d) => d.kind === 'audioinput');
+    hardware.cam = list.some((d) => d.kind === 'videoinput');
+  } catch {
+    /* can't tell: leave the buttons on and let the call itself say what's missing */
+  }
+}
+
+const videoConstraints = (back: boolean): MediaTrackConstraints => ({ facingMode: back ? 'environment' : 'user', width: { ideal: 1280 }, height: { ideal: 720 } });
+
+/** Mic for a voice call; camera, plus the mic if there is one, for a video call. */
+async function getMedia(video: boolean, back = false): Promise<MediaStream> {
+  if (!navigator.mediaDevices?.getUserMedia) throw new Error('This browser can only make calls on a secure (https) page.');
+  const audio = { echoCancellation: true, noiseSuppression: true };
+  if (!video) return navigator.mediaDevices.getUserMedia({ audio });
+  if (hardware.mic) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio, video: videoConstraints(back) });
+    } catch {
+      // No usable mic (missing, busy or not allowed): the camera alone still makes a video call.
+    }
+  }
+  return navigator.mediaDevices.getUserMedia({ video: videoConstraints(back) });
 }
 
 /** Just a camera, front or back, for turning it on or switching mid-call. */
 async function getCamera(back: boolean): Promise<MediaStreamTrack> {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: back ? 'environment' : 'user', width: { ideal: 1280 }, height: { ideal: 720 } } });
+  const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints(back) });
   return stream.getVideoTracks()[0];
 }
 
@@ -162,6 +187,7 @@ export async function startCall(device: string, video: boolean) {
     return;
   }
   calls.current.local = local;
+  calls.current.mic = local.getAudioTracks().length > 0;
   if (!send(call, { c: 'ring', video })) return finish('The connection to the other device was lost.', `${cap(kindOf(call))} · couldn't connect`);
   ringTimer = setTimeout(() => {
     if (calls.current?.id !== call.id || calls.current.phase !== 'ringing') return;
@@ -192,6 +218,7 @@ export async function accept(video: boolean) {
   const live = calls.current;
   live.local = local;
   live.cam = video;
+  live.mic = local.getAudioTracks().length > 0;
   send(live, { c: 'accept', video });
   await join(live);
 }
@@ -213,7 +240,7 @@ export function hangup(message = 'Call ended.') {
 
 export function toggleMic() {
   const call = calls.current;
-  if (!call?.local) return;
+  if (!call?.local?.getAudioTracks().length) return;
   call.mic = !call.mic;
   for (const t of call.local.getAudioTracks()) t.enabled = call.mic;
   sendMediaState(call);
@@ -375,5 +402,8 @@ export function enableCalls() {
   if (enabled || typeof window === 'undefined') return;
   enabled = true;
   listenForCalls({ signal: onSignal, state: onState });
+  checkDevices();
+  // Labels and the full list show up once the page may use them, and devices come and go.
+  navigator.mediaDevices?.addEventListener('devicechange', checkDevices);
   addEventListener('pagehide', () => calls.current && hangup());
 }

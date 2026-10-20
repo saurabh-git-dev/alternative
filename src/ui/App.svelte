@@ -13,7 +13,8 @@
   it/registry.ts), and `#/tool/<video tool>/recording/<id>` opens a video
   tool with a saved recording loaded. Every other route works everywhere.
 
-  `chat/` is unlisted (no link to it anywhere): its home page, and its
+  `chat/` is unlisted (no link to it, unless this browser switched one on
+  from the chat page, see chat-link.svelte.ts): its home page, and its
   `#/connect…` routes, are Connect with voice and video calls (see
   connect/calls.svelte.ts).
 -->
@@ -30,12 +31,13 @@
   import TextEditor from './connect/TextEditor.svelte';
   import CallPanel from './connect/CallPanel.svelte';
   import { enableCalls } from './connect/calls.svelte';
+  import { chatLink } from './chat-link.svelte';
   import ItHome from './it/ItHome.svelte';
   import ItTool from './it/ItTool.svelte';
   import VideoHome from './video/VideoHome.svelte';
   import RecordHome from './record/RecordHome.svelte';
   import { getItTool } from '../it/registry';
-  import { FILES_HOME, IT_HOME, RECORD_HOME, VIDEO_HOME, section, type Section } from './section';
+  import { CHAT_HOME, FILES_HOME, IT_HOME, RECORD_HOME, VIDEO_HOME, section, type Section } from './section';
   import { PIPELINE_ROUTE } from '../core/pipeline';
   import { LINK_ROUTE, QR_ROUTE } from '../core/share';
   import { DIRECT_ROUTE } from '../core/direct';
@@ -129,6 +131,9 @@
     { id: 'record', href: RECORD_HOME, icon: '⏺️', label: 'Screen recorder', short: 'Record' },
     { id: 'it', href: IT_HOME, icon: '🛠️', label: 'IT tools', short: 'IT' },
   ];
+  const CHAT = { id: 'chat' as const, href: CHAT_HOME, icon: '💬', label: 'Chat', short: 'Chat' };
+  /** Chat joins the menu only in a browser that switched it on. */
+  const shownSections = $derived(chatLink.shown ? [...SECTIONS, CHAT] : SECTIONS);
 
   const connected = $derived(connectedCount());
   const live = $derived(liveDevices().length);
@@ -150,7 +155,7 @@
     <span class="name">Tools</span>
   </a>
   <nav class="sections" aria-label="Sections">
-    {#each SECTIONS as s (s.id)}
+    {#each shownSections as s (s.id)}
       <a href={s.href} class:active={section === s.id} aria-current={section === s.id ? 'page' : undefined} title={s.label}>
         <span aria-hidden="true">{s.icon}</span> <span class="long">{s.label}</span><span class="short">{s.short}</span>
       </a>
