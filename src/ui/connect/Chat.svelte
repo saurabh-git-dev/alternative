@@ -9,7 +9,7 @@
   import { download, formatBytes } from '../../core/files';
   import FilePreview from '../components/FilePreview.svelte';
   import EditMenu from '../components/EditMenu.svelte';
-  import { calls as callState, startCall } from './calls.svelte';
+  import { calls as callState, hardware, startCall } from './calls.svelte';
   import { displayName, endDevice, forget, hub, isLive, markRead, resend, secondsLeft, sendFiles, sendText, type Device, type Message } from './devices.svelte';
 
   let { device, onOpen, calls = false }: { device: Device; onOpen: (id: string, files: File[]) => void; calls?: boolean } = $props();
@@ -131,8 +131,8 @@
     </div>
     {#if calls && live}
       {@const busy = !!callState.current || device.conn.state !== 'connected'}
-      <button class="btn call-btn" disabled={busy} onclick={() => startCall(device.key, false)} title="Voice call" aria-label="Voice call">📞</button>
-      <button class="btn call-btn" disabled={busy} onclick={() => startCall(device.key, true)} title="Video call" aria-label="Video call">🎥</button>
+      <button class="btn call-btn" disabled={busy || !hardware.mic} onclick={() => startCall(device.key, false)} title={hardware.mic ? 'Voice call' : 'Voice call (no microphone found)'} aria-label="Voice call">📞</button>
+      <button class="btn call-btn" disabled={busy || !hardware.cam} onclick={() => startCall(device.key, true)} title={hardware.cam ? 'Video call' : 'Video call (no camera found)'} aria-label="Video call">🎥</button>
     {/if}
     {#if live}
       <button class="btn" onclick={() => endDevice(device.key)}>End</button>

@@ -35,6 +35,8 @@ export const FILES_HOME = sectionHref('files');
 export const VIDEO_HOME = sectionHref('video');
 export const RECORD_HOME = sectionHref('record');
 export const IT_HOME = sectionHref('it');
+/** Only shown in a browser that switched the link on (see chat-link.svelte.ts). */
+export const CHAT_HOME = sectionHref('chat');
 
 /** Link to an IT tool from any section, optionally opening it with this input. */
 export function itToolHref(id: string, state?: ToolState): string {

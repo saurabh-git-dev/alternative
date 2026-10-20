@@ -184,7 +184,7 @@ export class CallMedia {
 /** Plain-language message for a failed camera or mic request. */
 export function explainMediaError(error: unknown, video: boolean): string {
   const name = (error as { name?: string })?.name;
-  const what = video ? 'camera and microphone' : 'microphone';
+  const what = video ? 'camera' : 'microphone';
   if (name === 'NotAllowedError' || name === 'SecurityError') return `Allow this page to use your ${what} to make calls.`;
   if (name === 'NotFoundError' || name === 'OverconstrainedError') return `No ${what} found on this device.`;
   if (name === 'NotReadableError') return `Your ${what} is in use by another app.`;
