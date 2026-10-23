@@ -6,6 +6,11 @@
  */
 import { sectionHref } from '../ui/section';
 
+/** Running inside the Windows, Linux or Android app (src-tauri/) rather than a browser. */
+export function isNativeApp(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
 /** Chrome's `beforeinstallprompt` event; not in the DOM typings. */
 interface InstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -35,7 +40,8 @@ export function setupInstall(): void {
   });
   addEventListener('appinstalled', () => (deferred = null));
   // Only built sites have sw.js; in dev it would cache files Vite serves fresh.
-  if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  // The native apps bundle every file already, so they skip it too.
+  if (import.meta.env.PROD && !isNativeApp() && 'serviceWorker' in navigator) {
     const root = new URL(sectionHref('files'), location.href);
     root.hash = '';
     navigator.serviceWorker.register(new URL('sw.js', root), { scope: root.pathname }).catch((e: unknown) => {

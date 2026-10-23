@@ -1,0 +1,222 @@
+# On every merge to main: work out the next semver version, publish the site
+# to GitHub Pages, build the Windows, Linux (x64 + arm64) and Android apps,
+# then tag the commit and attach the apps to a GitHub release.
+#
+# Pull requests that touch the app shell or this workflow run the builds too
+# (without releasing), so a broken build shows up before the merge.
+#
+# One-time setup: Settings → Pages → Source: "GitHub Actions". Optional
+# Android signing secrets are described in docs/native-apps.md.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - src-tauri/**
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+concurrency:
+  # Merges queue up so two of them never pick the same version.
+  group: release-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: next
+        # Breaking change (`feat!:`, `fix!:`, "BREAKING CHANGE") → major,
+        # `feat:` → minor, anything else → patch. Commit messages since the
+        # last tag decide; merge commits carry the PR title, so a PR titled
+        # "feat: …" bumps the minor version.
+        run: |
+          last=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)
+          if [ -z "$last" ]; then
+            version=$(node -p "require('./package.json').version")
+          elif [ "$(git rev-list -n1 "$last")" = "$(git rev-parse HEAD)" ]; then
+            version=${last#v}
+          else
+            IFS=. read -r major minor patch <<< "${last#v}"
+            log=$(git log --format=%B "$last"..HEAD)
+            if grep -qE '^[a-z]+(\([^)]*\))?!:|BREAKING CHANGE' <<< "$log"; then
+              version="$((major + 1)).0.0"
+            elif grep -qE '^feat(\([^)]*\))?:' <<< "$log"; then
+              version="$major.$((minor + 1)).0"
+            else
+              version="$major.$minor.$((patch + 1))"
+            fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Version: $version" >> "$GITHUB_STEP_SUMMARY"
+
+  site:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  pages:
+    needs: site
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  desktop:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            runner: windows-latest
+            bundles: nsis,msi
+          # 22.04 keeps the Linux builds working on older distros (glibc 2.35).
+          - name: linux-x64
+            runner: ubuntu-22.04
+            bundles: deb,rpm,appimage
+          - name: linux-arm64
+            runner: ubuntu-22.04-arm
+            bundles: deb,rpm,appimage
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils
+      - run: npm ci
+      - run: npx tauri build --bundles ${{ matrix.bundles }} --config '{"version":"${{ needs.version.outputs.version }}"}'
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
+
+  android:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      NDK_VERSION: 27.2.12479018
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      # The runner image ships the Android SDK; only the NDK is added.
+      - run: |
+          sdkmanager=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)
+          (yes || true) | "$sdkmanager" --licenses > /dev/null
+          "$sdkmanager" --install "ndk;$NDK_VERSION"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      # The Android project (src-tauri/gen/android) is generated fresh each
+      # time, then given the app icons.
+      - run: |
+          npx tauri android init --ci
+          npx tauri icon public/icons/icon-512.png
+      - run: npx tauri android build --apk --target aarch64 armv7 x86_64 --config '{"version":"${{ needs.version.outputs.version }}"}'
+      - name: Sign the APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          mkdir -p out
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+          else
+            # No key configured: sign with a throwaway key so the APK still
+            # installs, but it can't update over a previous build.
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; the APK is signed with a throwaway key."
+            KEYSTORE_PASSWORD=throwaway KEY_PASSWORD=throwaway KEY_ALIAS=tools
+            keytool -genkeypair -keystore release.jks -alias tools -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass throwaway -keypass throwaway -dname "CN=Tools"
+          fi
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          zipalign=$(dirname "$apksigner")/zipalign
+          unsigned=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-unsigned.apk' | head -1)
+          "$zipalign" -f -p 4 "$unsigned" aligned.apk
+          "$apksigner" sign --ks release.jks --ks-pass "pass:$KEYSTORE_PASSWORD" \
+            --ks-key-alias "$KEY_ALIAS" --key-pass "pass:${KEY_PASSWORD:-$KEYSTORE_PASSWORD}" \
+            --out "out/Tools_${{ needs.version.outputs.version }}_android.apk" aligned.apk
+          rm -f release.jks
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-android
+          if-no-files-found: error
+          path: out/*.apk
+
+  release:
+    if: github.event_name != 'pull_request'
+    needs: [version, pages, desktop, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: app-*
+          path: apps
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: v${{ needs.version.outputs.version }}
+        run: |
+          ls -lh apps
+          gh release create "$VERSION" apps/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$VERSION" --generate-notes --latest
