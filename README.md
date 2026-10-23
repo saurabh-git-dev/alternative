@@ -79,8 +79,9 @@ Requires Node 20+.
 
 ### Hosting
 
-Pushing to `main` deploys to GitHub Pages via `.github/workflows/deploy.yml`
-(enable it once under Settings → Pages → Source: GitHub Actions).
+Every merge to `main` deploys to GitHub Pages and publishes a versioned
+release with the native apps, via `.github/workflows/release.yml` (enable
+Pages once under Settings → Pages → Source: GitHub Actions).
 
 `dist/` is a static site that works from any sub-path, so any static host works. For full speed, the host
 should send these headers (they enable multi-threaded WASM):
@@ -101,6 +102,12 @@ service worker (`src/pwa/sw.js`, written to `dist/sw.js` by `vite.config.ts`)
 caches the app shell (about 8 MB) on the first visit, so every section opens
 offline. Heavy engines and AI models are cached the first time a tool uses
 them and work offline after that. The icons come from `tools/make-icons.py`.
+
+### Native apps
+
+Windows (x64), Linux (x64 and arm64: AppImage, deb, rpm) and Android apps
+wrap the same site with [Tauri](https://tauri.app) and are attached to every
+[release](../../releases). See [docs/native-apps.md](docs/native-apps.md).
 
 ## Engines
 
@@ -134,6 +141,7 @@ jsDelivr when first used, then cached.
 - [IT tools](docs/it-tools.md): the `it/` section, how sharing fits in, adding a tool
 - [Video](docs/video.md): the `video/` section, WebCodecs and ffmpeg.wasm, defaults
 - [Screen recorder](docs/screen-recorder.md): recording, storage in the browser, the library
+- [Native apps](docs/native-apps.md): the Tauri shell, release pipeline, versioning and Android signing
 
 ## License
 
