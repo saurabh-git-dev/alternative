@@ -17,6 +17,10 @@
   from the chat page, see chat-link.svelte.ts): its home page, and its
   `#/connect…` routes, are Connect with voice and video calls (see
   connect/calls.svelte.ts).
+
+  In the native apps (src-tauri/) there is also Local share, `#/local[/…]`
+  (see connect/LocalPage.svelte): devices on the same network, paired with
+  a PIN, with chat, files and calls. Calls are on everywhere in the apps.
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
@@ -27,6 +31,10 @@
   import PipelinePage from './pages/Pipeline.svelte';
   import Compare from './pages/Compare.svelte';
   import ConnectPage from './connect/ConnectPage.svelte';
+  import LocalPage from './connect/LocalPage.svelte';
+  import AskDialog from './connect/AskDialog.svelte';
+  import PairPinDialog from './connect/PairPinDialog.svelte';
+  import { localHub, startLocal } from './connect/local.svelte';
   import Notice from './connect/Notice.svelte';
   import TextEditor from './connect/TextEditor.svelte';
   import CallPanel from './connect/CallPanel.svelte';
@@ -44,10 +52,12 @@
   import { getAction } from '../actions';
   import { connectedCount, hub, liveDevices } from './connect/devices.svelte';
   import { loadTheme, saveTheme, type Theme } from './settings';
-  import { canInstall, install } from '../pwa/install.svelte';
+  import { canInstall, install, isNativeApp } from '../pwa/install.svelte';
 
+  const native = isNativeApp();
   let hash = $state(location.hash);
-  if (section === 'chat') enableCalls();
+  if (section === 'chat' || native) enableCalls();
+  if (native) startLocal();
   let theme = $state<Theme>(loadTheme());
   /** Files dropped on the home page, handed to the tool the user picks. */
   let pending = $state<File[]>([]);
@@ -94,6 +104,8 @@
           ? 'compare'
           : hash === '#/share'
           ? 'share'
+          : native && (hash === '#/local' || hash.startsWith('#/local/'))
+          ? 'local'
           : hash === '#/connect' || hash.startsWith('#/connect/') || hash === '#/scan' || hash.startsWith('#/direct') || hash.startsWith(`#${DIRECT_ROUTE}`)
           ? 'connect'
           : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : section === 'chat' ? 'connect' : `${section}-home`,
@@ -120,6 +132,8 @@
         ? 'Compare PDFs · Tools'
         : page === 'share'
         ? 'Share as link or QR · Tools'
+        : page === 'local'
+        ? 'Local share · Tools'
         : page === 'connect'
         ? section === 'chat' ? 'Chat' : 'Connect devices · Tools'
         : 'Shared file · Tools';
@@ -136,6 +150,7 @@
   const shownSections = $derived(chatLink.shown ? [...SECTIONS, CHAT] : SECTIONS);
 
   const connected = $derived(connectedCount());
+  const nearbyOnline = $derived(localHub.devices.filter((d) => d.linked).length);
   const live = $derived(liveDevices().length);
 
   function toggleTheme() {
@@ -182,6 +197,13 @@
       <span class="dot waiting" aria-hidden="true"></span>
     {/if}
   </a>
+  {#if native}
+    <a class="scan" class:live={nearbyOnline > 0} class:active={page === 'local'} href="#/local" title="Local share: devices on this network, no internet needed">
+      <span class="link-icon" aria-hidden="true">📡</span>
+      <span class="label">Local share</span>
+      {#if nearbyOnline}<span class="dot" aria-hidden="true"></span>{/if}
+    </a>
+  {/if}
   {#if canInstall()}
     <button class="install" onclick={install} title="Install Tools as an app. It opens in its own window and works offline.">
       ⬇️ <span>Install</span>
@@ -221,6 +243,8 @@
     {#key hash}
       <ConnectPage {hash} onOpen={openTool} calls={section === 'chat'} />
     {/key}
+  {:else if page === 'local'}
+    <LocalPage {hash} onOpen={openTool} />
   {:else if page === 'received'}
     <Received {hash} onOpen={openTool} />
   {:else}
@@ -229,7 +253,9 @@
 </main>
 
 <Notice onOpen={openTool} />
-{#if section === 'chat'}<CallPanel />{/if}
+{#if section === 'chat' || native}<CallPanel />{/if}
+<AskDialog />
+{#if native}<PairPinDialog />{/if}
 {#if hub.editing}
   {#key hub.editing.file}
     <TextEditor file={hub.editing.file} device={hub.editing.device} />
@@ -318,6 +344,7 @@
     border-radius: 999px;
   }
   .scan {
+    white-space: nowrap;
     display: inline-flex;
     align-items: center;
     gap: 6px;

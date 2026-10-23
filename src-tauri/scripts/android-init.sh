@@ -13,6 +13,11 @@ PERMISSIONS=(
   android.permission.CAMERA
   android.permission.RECORD_AUDIO
   android.permission.MODIFY_AUDIO_SETTINGS
+  # Local share: find devices on the Wi-Fi (multicast) and talk to them.
+  android.permission.INTERNET
+  android.permission.ACCESS_NETWORK_STATE
+  android.permission.ACCESS_WIFI_STATE
+  android.permission.CHANGE_WIFI_MULTICAST_STATE
 )
 
 manifest=src-tauri/gen/android/app/src/main/AndroidManifest.xml

@@ -7,7 +7,7 @@
 <script lang="ts">
   import { download, formatBytes } from '../../core/files';
   import EditMenu from '../components/EditMenu.svelte';
-  import { displayName, getDevice, hub } from './devices.svelte';
+  import { chatHref, displayName, getDevice, hub } from './devices.svelte';
 
   let { onOpen }: { onOpen: (id: string, files: File[]) => void } = $props();
 
@@ -52,28 +52,28 @@
         {/if}
       </p>
       <div class="actions">
-        <a class="btn" href="#/connect/{device.key}">Open chat</a>
+        <a class="btn" href={chatHref(device)}>Open chat</a>
         <button class="btn close" aria-label="Close" onclick={close}>✕</button>
       </div>
     {:else if message.kind === 'text'}
       <p>💬 <strong>{name}</strong>: <span class="text">{message.text}</span></p>
       <div class="actions">
         <button class="btn" onclick={copy}>{copied ? '✓ Copied' : 'Copy'}</button>
-        <a class="btn" href="#/connect/{device.key}">Reply</a>
+        <a class="btn" href={chatHref(device)}>Reply</a>
         <button class="btn close" aria-label="Close" onclick={close}>✕</button>
       </div>
     {:else}
       <p>
         📥 <strong>{name}</strong> sent
-        {files.length === 1 ? files[0].name : `${files.length} files`}
+        {message.meta.length === 1 ? message.meta[0].name : `${message.meta.length} files`}
         <span class="muted">({formatBytes(message.total)})</span>
       </p>
       <div class="actions">
-        {#if files.length === 1}
+        {#if message.meta.length === 1 && files[0]}
           <EditMenu file={files[0]} device={device.key} onOpen={(id, f) => (close(), onOpen(id, f))} />
-          <button class="btn" onclick={() => download(files[0], files[0].name)}>⬇ Download</button>
+          {#if !message.saved}<button class="btn" onclick={() => download(files[0], files[0].name)}>⬇ Download</button>{/if}
         {/if}
-        <a class="btn" href="#/connect/{device.key}">Open chat</a>
+        <a class="btn" href={chatHref(device)}>Open chat</a>
         <button class="btn close" aria-label="Close" onclick={close}>✕</button>
       </div>
     {/if}

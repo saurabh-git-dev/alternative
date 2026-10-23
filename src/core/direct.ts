@@ -38,11 +38,14 @@
  * such as "Blue Otter" and "iPhone · Safari", sent on each connection and
  * again after a rename), `text` (a chat message, confirmed with `got`, re-sent
  * after a reconnect until confirmed, so the receiver drops repeats by id)
- * `sig` (call signalling, passed to `onSignal` as is; see core/call.ts) and
+ * `ask` / `answer` (a batch over 1 GB waits for the receiver to accept it
+ * before its `files`; turned down, it is dropped and the sender hears
+ * `onDeclined`), `sig` (call signalling, passed to `onSignal` as is; see core/call.ts) and
  * `bye` (end the session). Frames go out strictly in the order they
  * are sealed, because the receiver expects consecutive counter nonces.
  */
 import type { DataConnection, Peer, PeerOptions } from 'peerjs';
+import type { Connection } from './connection';
 import { Channel, authKey, authTag, channelKeys, fromB64url, newNonce, newSecret, sdpFingerprint, toB64url, verifyTag, type Role } from './direct-crypto';
 
 /** Route prefix, without the leading `#`. */
@@ -78,8 +81,12 @@ export interface Progress {
 export interface Handlers {
   onState: (state: ConnectionState) => void;
   onProgress?: (progress: Progress) => void;
-  /** A batch arrived intact. */
-  onReceived?: (id: string, files: File[]) => void;
+  /**
+   * A batch arrived intact. Over Local share, files are written to disk as
+   * they arrive: `saved` says where, and `files` holds those small enough to
+   * load (the rest stay on disk only).
+   */
+  onReceived?: (id: string, files: File[], saved?: { name: string; path: string; size: number; type: string }[]) => void;
   /** The other side confirmed a batch this side sent. */
   onSent?: (id: string) => void;
   /** A batch stopped part-way (the connection dropped). */
@@ -90,6 +97,10 @@ export interface Handlers {
   onText?: (id: string, text: string, at: number) => void;
   /** Call signalling from the other device (see core/call.ts). */
   onSignal?: (data: unknown) => void;
+  /** The other device asks before sending a batch over `HUGE_BYTES`; resolve true to take it. */
+  onAsk?: (id: string, files: FileMeta[]) => Promise<boolean>;
+  /** The other device turned down a batch this side asked to send. */
+  onDeclined?: (id: string, message?: string) => void;
 }
 
 export interface TransferOptions {
@@ -101,11 +112,14 @@ export interface TransferOptions {
   resume?: boolean;
 }
 
-interface FileMeta {
+export interface FileMeta {
   name: string;
   type: string;
   size: number;
 }
+
+/** Batches bigger than this wait for the receiver to accept them (`ask`, then `answer`). */
+export const HUGE_BYTES = 1024 ** 3;
 
 const KIND_JSON = 1;
 const KIND_DATA = 2;
@@ -186,6 +200,8 @@ interface Link {
   inbox: Promise<void>;
   incoming: { id: string; list: FileMeta[]; index: number; parts: Uint8Array[]; got: number; files: File[] } | null;
   confirm: Map<string, () => void>;
+  /** Batches over `HUGE_BYTES` waiting for the receiver's yes or no. */
+  answers: Map<string, (ok: boolean) => void>;
   /** Frames go out one after another, in sealing order. */
   out: Promise<void>;
   /** Text messages already sent over this connection, awaiting `got`. */
@@ -195,7 +211,8 @@ interface Link {
   authDone: () => void;
 }
 
-export class DirectTransfer {
+export class DirectTransfer implements Connection {
+  readonly kind = 'webrtc';
   private peer: Peer | null = null;
   private link: Link | null = null;
   private ended = false;
@@ -311,6 +328,7 @@ export class DirectTransfer {
       inbox: Promise.resolve(),
       incoming: null,
       confirm: new Map(),
+      answers: new Map(),
       out: Promise.resolve(),
       textsSent: new Set(),
       authSent: Promise.resolve(),
@@ -427,6 +445,15 @@ export class DirectTransfer {
     } else if (message.t === 'text' && typeof message.text === 'string' && id) {
       await this.sendJson(link, { t: 'got', id });
       this.handlers.onText?.(id, message.text, typeof message.at === 'number' ? message.at : Date.now());
+    } else if (message.t === 'ask' && Array.isArray(message.files)) {
+      // Asked in the background, so chat and calls keep flowing while the person decides.
+      const files = message.files;
+      const ask = this.handlers.onAsk ? this.handlers.onAsk(id, files) : Promise.resolve(true);
+      ask.then((ok) => {
+        if (this.link === link) this.sendJson(link, { t: 'answer', id, ok }).catch(() => {});
+      });
+    } else if (message.t === 'answer') {
+      link.answers.get(id)?.((message as { ok?: unknown }).ok === true);
     } else if (message.t === 'sig') {
       this.handlers.onSignal?.(message.d);
     } else if (message.t === 'bye') {
@@ -560,7 +587,12 @@ export class DirectTransfer {
           await this.sendBatch(link, id, files);
           this.outbox.shift();
           this.handlers.onSent?.(id);
-        } catch {
+        } catch (e) {
+          if (e instanceof Declined) {
+            this.outbox.shift();
+            this.handlers.onDeclined?.(id);
+            continue;
+          }
           // The connection dropped mid-batch: `lost` reported it; the batch stays queued and restarts on reconnect.
           if (this.link === link) this.lost(link);
           break;
@@ -575,6 +607,16 @@ export class DirectTransfer {
     const total = files.reduce((n, f) => n + f.size, 0);
     let done = 0;
     const meta = files.map((f) => ({ name: f.name, type: f.type || 'application/octet-stream', size: f.size }));
+    if (total > HUGE_BYTES) {
+      const answer = new Promise<boolean>((resolve, reject) => {
+        link.answers.set(id, resolve);
+        link.conn.on('close', () => reject(new Error('disconnected')));
+      });
+      await this.sendJson(link, { t: 'ask', id, files: meta });
+      const ok = await answer;
+      link.answers.delete(id);
+      if (!ok) throw new Declined();
+    }
     await this.sendJson(link, { t: 'files', id, files: meta });
     this.handlers.onProgress?.({ id, direction: 'send', done, total, file: files[0]?.name ?? '' });
     for (const file of files) {
@@ -616,6 +658,9 @@ export class DirectTransfer {
     this.peer = null;
   }
 }
+
+/** The receiver said no to a batch. */
+class Declined extends Error {}
 
 /** Routes a scanned code can open inside the app. */
 const SCANNABLE = /#\/(d|s|q)\/.+$/;

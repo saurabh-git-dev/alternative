@@ -67,6 +67,25 @@ interface Slots {
   video: RTCRtpTransceiver;
 }
 
+/**
+ * A connection made just for a call (Local share, see core/local-connection.ts)
+ * hasn't connected yet, and its offer and answer go once, without trickled
+ * candidates: wait until they hold this side's addresses (a few seconds at
+ * most). Connect's WebRTC link is already connected, so nothing waits there.
+ */
+async function settled(pc: RTCPeerConnection) {
+  if (pc.connectionState !== 'new' || pc.iceGatheringState === 'complete') return;
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      if (pc.iceGatheringState !== 'complete') return;
+      pc.removeEventListener('icegatheringstatechange', done);
+      resolve();
+    };
+    pc.addEventListener('icegatheringstatechange', done);
+    setTimeout(resolve, 3000);
+  });
+}
+
 /** Audio and video slots already on a connection, kept for its later calls. */
 const slotsOf = new WeakMap<RTCPeerConnection, Slots>();
 
@@ -112,6 +131,7 @@ export class CallMedia {
       if (this.slots.audio.currentDirection == null) {
         const offer = await this.pc.createOffer();
         await this.pc.setLocalDescription(offer);
+        await settled(this.pc);
         this.send(this.pc.localDescription!.toJSON());
       }
       return;
@@ -138,6 +158,7 @@ export class CallMedia {
     }
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
+    await settled(this.pc);
     this.send(this.pc.localDescription!.toJSON());
   }
 

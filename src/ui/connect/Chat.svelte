@@ -4,13 +4,19 @@
   that takes them (Edit). Type and press Enter to send text; attach, drop or
   paste files to send them. With `calls` (the chat/ page), the header also
   has voice and video call buttons, and calls show as lines in the chat.
+
+  The same chat serves Local share devices (connect/LocalPage.svelte): they
+  stay listed while away (nothing to End), received files are saved to
+  Downloads (Show in folder), and LocalSend devices take files only.
 -->
 <script lang="ts">
   import { download, formatBytes } from '../../core/files';
   import FilePreview from '../components/FilePreview.svelte';
   import EditMenu from '../components/EditMenu.svelte';
   import { calls as callState, hardware, startCall } from './calls.svelte';
-  import { displayName, endDevice, forget, hub, isLive, markRead, resend, secondsLeft, sendFiles, sendText, type Device, type Message } from './devices.svelte';
+  import { displayName, endDevice, forget, hub, isDirect, isLive, markRead, resend, secondsLeft, sendFiles, sendText, type Device, type Message } from './devices.svelte';
+  import { reveal } from '../../core/local';
+  import { LocalConnection } from '../../core/local-connection';
 
   let { device, onOpen, calls = false }: { device: Device; onOpen: (id: string, files: File[]) => void; calls?: boolean } = $props();
 
@@ -22,6 +28,9 @@
   let list = $state<HTMLDivElement>();
 
   const live = $derived(isLive(device));
+  const direct = $derived(isDirect(device));
+  /** Text works (everything but LocalSend devices, which take files only). */
+  const texts = $derived(!(device.transfer instanceof LocalConnection) || device.transfer.chat);
   const left = $derived(secondsLeft(device));
   const clock = $derived(`${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`);
 
@@ -91,8 +100,10 @@
 
   function status(m: Message): string {
     if (m.status === 'active') return `${formatBytes(m.done)} of ${formatBytes(m.total)}`;
-    if (m.status === 'queued') return device.conn.state === 'connected' ? 'Sending…' : 'Waiting for connection';
+    if (m.status === 'queued') return device.conn.state === 'connected' ? (m.kind === 'files' && !direct ? 'Waiting for them to accept…' : 'Sending…') : direct ? 'Waiting for connection' : 'Will send when the device is back';
     if (m.status === 'interrupted') return 'Interrupted';
+    if (m.status === 'declined') return m.note ?? 'Declined';
+    if (m.dir === 'in' && m.saved) return 'Saved to Downloads';
     return m.dir === 'out' ? '✓ Delivered' : '';
   }
 </script>
@@ -118,7 +129,13 @@
     <div class="who">
       <strong>{displayName(device)}{#if device.kind}<span class="kind"> · {device.kind}</span>{/if}</strong>
       <span class="muted small">
-        {#if device.conn.state === 'connected'}
+        {#if !direct}
+          {#if device.conn.state === 'connected'}
+            🔒 {texts ? 'Connected on your local network' : 'LocalSend · send it files'}
+          {:else}
+            {texts ? 'Offline · messages and files go when it is back' : 'Not on the network right now'}
+          {/if}
+        {:else if device.conn.state === 'connected'}
           🔒 Connected · closes in {clock} if idle
         {:else if device.conn.state === 'reconnecting' || (device.conn.state === 'waiting' && device.paired)}
           Reconnecting… keep both pages open
@@ -134,7 +151,9 @@
       <button class="btn call-btn" disabled={busy || !hardware.mic} onclick={() => startCall(device.key, false)} title={hardware.mic ? 'Voice call' : 'Voice call (no microphone found)'} aria-label="Voice call">📞</button>
       <button class="btn call-btn" disabled={busy || !hardware.cam} onclick={() => startCall(device.key, true)} title={hardware.cam ? 'Video call' : 'Video call (no camera found)'} aria-label="Video call">🎥</button>
     {/if}
-    {#if live}
+    {#if !direct}
+      <!-- Local devices stay listed: Forget is on the Local share page. -->
+    {:else if live}
       <button class="btn" onclick={() => endDevice(device.key)}>End</button>
     {:else}
       <button class="btn" onclick={() => forget(device.key)}>Remove</button>
@@ -144,7 +163,13 @@
   <div class="messages" bind:this={list}>
     {#if !device.messages.length}
       <p class="muted empty">
-        {live ? 'Send text or files of any size. They go straight to the other device, end-to-end encrypted.' : 'Nothing was sent.'}
+        {!direct
+          ? texts
+            ? 'Send text or files of any size. They go straight to the other device over your network, encrypted.'
+            : 'Attach or drop files to send them. The other device asks its owner to accept.'
+          : live
+            ? 'Send text or files of any size. They go straight to the other device, end-to-end encrypted.'
+            : 'Nothing was sent.'}
       </p>
     {/if}
     {#each device.messages as m (m.id)}
@@ -186,7 +211,15 @@
                 <div class="actions">
                   <EditMenu {file} {onOpen} device={m.dir === 'in' ? device.key : undefined} />
                   {#if canShare([file])}<button class="btn" onclick={() => navigator.share({ files: [file] }).catch(() => {})}>Save…</button>{/if}
-                  <button class="btn" onclick={() => download(file, file.name)}>⬇ Download</button>
+                  {#if m.saved?.[i]}
+                    <button class="btn" onclick={() => reveal(m.saved![i].path).catch(() => {})}>📂 Show in folder</button>
+                  {:else}
+                    <button class="btn" onclick={() => download(file, file.name)}>⬇ Download</button>
+                  {/if}
+                </div>
+              {:else if !file && m.saved?.[i]}
+                <div class="actions">
+                  <button class="btn" onclick={() => reveal(m.saved![i].path).catch(() => {})}>📂 Show in folder</button>
                 </div>
               {/if}
               {#if file && open[key]}
@@ -215,9 +248,13 @@
       }}
     >
       <input bind:this={picker} type="file" multiple hidden onchange={(e) => (send(e.currentTarget.files), (e.currentTarget.value = ''))} />
-      <button type="button" class="btn attach" title="Send files" aria-label="Send files" onclick={() => picker?.click()}>📎</button>
-      <textarea bind:value={draft} rows="1" placeholder="Message, or paste or drop files" onkeydown={onKey} onpaste={onPaste} aria-label="Message"></textarea>
-      <button class="btn btn-primary" disabled={!draft.trim()}>Send</button>
+      {#if texts}
+        <button type="button" class="btn attach" title="Send files" aria-label="Send files" onclick={() => picker?.click()}>📎</button>
+        <textarea bind:value={draft} rows="1" placeholder="Message, or paste or drop files" onkeydown={onKey} onpaste={onPaste} aria-label="Message"></textarea>
+        <button class="btn btn-primary" disabled={!draft.trim()}>Send</button>
+      {:else}
+        <button type="button" class="btn btn-primary files-only" onclick={() => picker?.click()}>📎 Send files</button>
+      {/if}
     </form>
   {/if}
   {#if dragging}<div class="drop" aria-hidden="true">Drop to send</div>{/if}
@@ -434,6 +471,9 @@
   }
   .attach {
     padding: 8px 11px;
+  }
+  .files-only {
+    flex: 1;
   }
   .drop {
     position: absolute;
