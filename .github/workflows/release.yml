@@ -153,7 +153,7 @@ jobs:
       # The runner image ships the Android SDK; only the NDK is added.
       - run: |
           sdkmanager=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)
-          yes | "$sdkmanager" --licenses > /dev/null
+          (yes || true) | "$sdkmanager" --licenses > /dev/null
           "$sdkmanager" --install "ndk;$NDK_VERSION"
           echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
