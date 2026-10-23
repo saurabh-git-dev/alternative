@@ -216,7 +216,13 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           VERSION: v${{ needs.version.outputs.version }}
+        # Artifacts keep their bundle folders (nsis/, deb/ …), so collect the
+        # files themselves. Re-running a failed release reuses it and replaces
+        # the files.
         run: |
-          ls -lh apps
-          gh release create "$VERSION" apps/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "$VERSION" --generate-notes --latest
+          mapfile -t files < <(find apps -type f)
+          ls -lh "${files[@]}"
+          gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 ||
+            gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "$VERSION" --generate-notes --latest
+          gh release upload "$VERSION" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
