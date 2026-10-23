@@ -150,10 +150,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      # The runner image ships the Android SDK; only the NDK is added.
       - run: |
-          sdkmanager --install "ndk;$NDK_VERSION"
-          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          sdkmanager=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)
+          yes | "$sdkmanager" --licenses > /dev/null
+          "$sdkmanager" --install "ndk;$NDK_VERSION"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
@@ -185,7 +187,7 @@ jobs:
             keytool -genkeypair -keystore release.jks -alias tools -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass throwaway -keypass throwaway -dname "CN=Tools"
           fi
-          apksigner=$(ls "$ANDROID_SDK_ROOT"/build-tools/*/apksigner | sort -V | tail -1)
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           zipalign=$(dirname "$apksigner")/zipalign
           unsigned=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-unsigned.apk' | head -1)
           "$zipalign" -f -p 4 "$unsigned" aligned.apk
