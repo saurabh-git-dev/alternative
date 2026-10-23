@@ -17,6 +17,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Same version Tauri's webview uses; only for turning on camera and WebRTC.
+webkit2gtk = { version = "2", features = ["v2_40"] }
+
 [profile.release]
 codegen-units = 1
 lto = true
