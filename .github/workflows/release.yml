@@ -164,10 +164,8 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       # The Android project (src-tauri/gen/android) is generated fresh each
-      # time, then given the app icons.
-      - run: |
-          npx tauri android init --ci
-          npx tauri icon public/icons/icon-512.png
+      # time, with the app icons and permissions.
+      - run: src-tauri/scripts/android-init.sh
       - run: npx tauri android build --apk --target aarch64 armv7 x86_64 --config '{"version":"${{ needs.version.outputs.version }}"}'
       - name: Sign the APK
         env:

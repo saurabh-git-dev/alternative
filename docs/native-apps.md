@@ -22,6 +22,11 @@ nearby devices on the local network (planned).
 - `isNativeApp()` (`src/pwa/install.svelte.ts`) tells the page it is inside
   the app; the service worker is skipped there because every file is already
   bundled.
+- Camera, microphone and screen capture are allowed for the app's own page
+  (`on_permission_request` in `src-tauri/src/lib.rs`). On Linux the app also
+  switches on WebKitGTK's media stream and WebRTC settings, which are off by
+  default; on Android, `src-tauri/scripts/android-init.sh` adds the camera and
+  microphone permissions, and the system asks for each the first time.
 - Linux uses the system WebKitGTK rather than Chromium: video tools fall back
   to ffmpeg.wasm where WebCodecs is missing.
 
@@ -72,7 +77,7 @@ Run anyway" on first launch until a code-signing certificate is added.
 npm ci
 npm run tauri dev                      # desktop window with hot reload
 npm run tauri build                    # installers in src-tauri/target/release/bundle/
-npm run tauri android init && npm run tauri android dev   # needs Android SDK + NDK
+src-tauri/scripts/android-init.sh && npm run tauri android dev   # needs Android SDK + NDK
 ```
 
 Linux needs `libwebkit2gtk-4.1-dev librsvg2-dev patchelf`; see
