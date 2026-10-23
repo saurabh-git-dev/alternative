@@ -109,6 +109,10 @@ Windows (x64), Linux (x64 and arm64: AppImage, deb, rpm) and Android apps
 wrap the same site with [Tauri](https://tauri.app) and are attached to every
 [release](../../releases). See [docs/native-apps.md](docs/native-apps.md).
 
+The apps add **Local share**: devices on the same network, found without the
+internet. Pair with a PIN to chat, call and send files of any size; LocalSend
+apps show up too. See [docs/local-share.md](docs/local-share.md).
+
 ## Engines
 
 | Engine | Used for | License | Size |
@@ -142,6 +146,7 @@ jsDelivr when first used, then cached.
 - [Video](docs/video.md): the `video/` section, WebCodecs and ffmpeg.wasm, defaults
 - [Screen recorder](docs/screen-recorder.md): recording, storage in the browser, the library
 - [Native apps](docs/native-apps.md): the Tauri shell, release pipeline, versioning and Android signing
+- [Local share](docs/local-share.md): finding, pairing with and sending to devices on the local network
 
 ## License
 

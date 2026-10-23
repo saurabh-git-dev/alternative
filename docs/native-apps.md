@@ -4,8 +4,9 @@ Windows, Linux and Android apps wrap the same site in a thin
 [Tauri 2](https://tauri.app) shell (`src-tauri/`). The built site (`dist/`)
 is bundled inside the app, so every tool works offline exactly as on the web,
 and a tool added under `src/actions/` shows up in all the apps with no extra
-work. Native code is only for what a browser can't do, such as finding
-nearby devices on the local network (planned).
+work. Native code is only for what a browser can't do: Local share, which
+finds devices on the local network and pairs, chats, calls and sends files
+with them directly (see [local-share.md](local-share.md)).
 
 | Platform | Files | Runs on |
 |---|---|---|
@@ -25,8 +26,11 @@ nearby devices on the local network (planned).
 - Camera, microphone and screen capture are allowed for the app's own page
   (`on_permission_request` in `src-tauri/src/lib.rs`). On Linux the app also
   switches on WebKitGTK's media stream and WebRTC settings, which are off by
-  default; on Android, `src-tauri/scripts/android-init.sh` adds the camera and
-  microphone permissions, and the system asks for each the first time.
+  default; on Android, `src-tauri/scripts/android-init.sh` adds the camera,
+  microphone and network permissions, and the system asks for the camera and
+  microphone the first time.
+- Local share runs in the native side (`src-tauri/src/local/`), started with
+  the app; on Android it holds a Wi-Fi multicast lock so discovery works.
 - Linux uses the system WebKitGTK rather than Chromium: video tools fall back
   to ffmpeg.wasm where WebCodecs is missing.
 

@@ -11,14 +11,24 @@
  *   only, gone when it closes) and both sides reconnect by themselves. Chat
  *   text is kept with it; files are kept in IndexedDB (connect/history-db.ts)
  *   until the session ends.
- * - Calls (the hidden `chat/` page only, see connect/calls.svelte.ts) plug in
- *   with `listenForCalls`; elsewhere a ringing call is turned down.
+ * - Calls (the hidden `chat/` page and the native apps, see
+ *   connect/calls.svelte.ts) plug in with `listenForCalls`; elsewhere a
+ *   ringing call is turned down.
+ * - The native apps' Local share devices (connect/local.svelte.ts) live here
+ *   too, with a `LocalConnection` instead of a `DirectTransfer`; both are a
+ *   `Connection` (core/connection.ts), so the chat, files and calls work the
+ *   same. They are listed on the Local share page, not Connect, and don't
+ *   time out or come back from sessionStorage (the native side remembers them).
+ * - A batch over 1 GB waits for the receiver to accept it, on every kind of
+ *   connection (`askToAccept`, shown by connect/AskDialog.svelte).
  */
 import { DirectTransfer, type ConnectionState, type Invite, type Progress } from '../../core/direct';
 import { fromB64url, toB64url } from '../../core/direct-crypto';
 import { deviceName, randomDeviceName } from '../../core/device';
 import * as history from './history-db';
 import { parseSignal } from '../../core/call';
+import type { Connection } from '../../core/connection';
+import { askToAccept } from './asks.svelte';
 
 export const IDLE_MS = 15 * 60_000;
 const SAVE_KEY = 'tools-connect';
@@ -42,15 +52,19 @@ export interface Message {
   meta: FileInfo[];
   done: number;
   total: number;
-  status: 'queued' | 'active' | 'complete' | 'interrupted';
+  status: 'queued' | 'active' | 'complete' | 'interrupted' | 'declined';
   /** Name of the file going across right now. */
   current: string;
+  /** Why it was declined, in words. */
+  note?: string;
+  /** Local share: where each received file was saved, in the same order as `meta`. */
+  saved?: { name: string; path: string; size: number; type: string }[];
 }
 
 export interface Device {
   /** Local id of this session. */
   key: string;
-  transfer: DirectTransfer;
+  transfer: Connection;
   conn: ConnectionState;
   /** The other device's name, once it has said it. */
   name: string;
@@ -78,7 +92,7 @@ export const hub = $state<{
   now: number;
 }>({ devices: [], viewing: null, notice: null, editing: null, me: loadName(), now: Date.now() });
 
-const myKind = deviceName();
+export const myKind = deviceName();
 
 /** This browser's name: saved, or a new random one ("Blue Otter") saved for next time. */
 function loadName(): string {
@@ -103,29 +117,43 @@ export function setMyName(name?: string) {
     /* storage blocked: the name lasts for this page */
   }
   for (const d of hub.devices) if (isLive(d)) d.transfer.rename(next);
+  for (const hook of renameHooks) hook(next);
+}
+
+const renameHooks: ((name: string) => void)[] = [];
+
+/** Hear when this device is renamed (Local share tells the native side). */
+export function onRename(hook: (name: string) => void) {
+  renameHooks.push(hook);
 }
 
 const me = () => ({ name: hub.me, kind: myKind });
 
 export const isLive = (d: Device) => d.conn.state !== 'ended' && d.conn.state !== 'failed';
 
+/** A WebRTC Connect session (not a Local share device). */
+export const isDirect = (d: Device): d is Device & { transfer: DirectTransfer } => d.transfer instanceof DirectTransfer;
+
+/** Where a device's chat is: Connect for WebRTC sessions, Local share for local devices. */
+export const chatHref = (d: Device) => (isDirect(d) ? `#/connect/${d.key}` : `#/local/${d.key}`);
+
 /** Devices to list: connected now or before (with their history), and guests on their way in. */
 export function listedDevices(): Device[] {
-  return hub.devices.filter((d) => d.paired || d.transfer.role === 'guest');
+  return hub.devices.filter((d) => isDirect(d) && (d.paired || d.transfer.role === 'guest'));
 }
 
 /** Devices files can be sent to: paired and not ended (they may be reconnecting). */
 export function liveDevices(): Device[] {
-  return hub.devices.filter((d) => d.paired && isLive(d));
+  return hub.devices.filter((d) => isDirect(d) && d.paired && isLive(d));
 }
 
 export function connectedCount(): number {
-  return hub.devices.filter((d) => d.conn.state === 'connected').length;
+  return hub.devices.filter((d) => isDirect(d) && d.conn.state === 'connected').length;
 }
 
 /** The QR code currently offered to a new device, if any. */
-export function pendingHost(): Device | undefined {
-  return hub.devices.find((d) => !d.paired && d.transfer.role === 'host' && isLive(d));
+export function pendingHost(): (Device & { transfer: DirectTransfer }) | undefined {
+  return hub.devices.find((d): d is Device & { transfer: DirectTransfer } => isDirect(d) && !d.paired && d.transfer.role === 'host' && isLive(d));
 }
 
 export function getDevice(key: string): Device | undefined {
@@ -140,9 +168,10 @@ export function secondsLeft(d: Device): number {
 export function displayName(d: Device): string {
   if (d.name) {
     // Two devices with the same name (both renamed alike, or a random clash): tell them apart by kind.
-    const clash = d.name === hub.me || hub.devices.some((x) => x.key !== d.key && x.name === d.name && isLive(x));
+    const clash = d.name === hub.me || hub.devices.some((x) => x.key !== d.key && x.name === d.name && isLive(x) && isDirect(x) === isDirect(d));
     return clash && d.kind ? `${d.name} (${d.kind})` : d.name;
   }
+  if (!isDirect(d)) return 'Nearby device';
   return d.transfer.role === 'host' ? 'Device that scanned your code' : 'Device that showed the code';
 }
 
@@ -193,7 +222,7 @@ function arrived(d: Device, m: Message) {
   hub.notice = { device: d.key, message: m.id };
 }
 
-function handlersFor(key: string) {
+export function handlersFor(key: string) {
   const find = () => getDevice(key);
   const message = (id: string) => find()?.messages.find((m) => m.id === id);
   return {
@@ -226,17 +255,32 @@ function handlersFor(key: string) {
       m.current = p.file;
       touch(d);
     },
-    onReceived: (id: string, files: File[]) => {
+    onReceived: (id: string, files: File[], saved?: Message['saved']) => {
       const d = find();
       const m = message(id);
       if (!d || !m) return;
       m.files = files;
-      m.meta = fileInfo(files);
+      m.meta = saved ? saved.map(({ name, type, size }) => ({ name, type, size })) : fileInfo(files);
+      m.saved = saved;
       m.status = 'complete';
       m.done = m.total;
       arrived(d, m);
-      history.saveFiles(d.key, id, files);
+      if (isDirect(d)) history.saveFiles(d.key, id, files);
       save();
+    },
+    onDeclined: (id: string, note?: string) => {
+      const d = find();
+      const m = message(id);
+      if (!d || !m) return;
+      m.status = 'declined';
+      m.note = note ?? `${displayName(d)} declined.`;
+      save();
+    },
+    onAsk: (_id: string, files: FileInfo[]) => {
+      const d = find();
+      if (!d) return Promise.resolve(false);
+      touch(d);
+      return askToAccept({ from: displayName(d), files, device: key });
     },
     onSent: (id: string) => {
       const d = find();
@@ -276,7 +320,7 @@ function handlersFor(key: string) {
   };
 }
 
-function add(make: (key: string) => DirectTransfer, init: Partial<Device> = {}): Device {
+export function add(make: (key: string) => Connection, init: Partial<Device> = {}): Device {
   const key = init.key ?? crypto.randomUUID();
   // Its first state change ('starting') arrives before it is listed, which matches the initial state.
   const transfer = make(key);
@@ -296,7 +340,7 @@ export function newHost(files: File[] = []): Device {
 
 /** Connect to the device that showed this invite (or return that session if it is already open). */
 export function join(invite: Invite): Device {
-  const existing = hub.devices.find((d) => d.transfer.invite.peerId === invite.peerId && isLive(d));
+  const existing = hub.devices.find((d) => isDirect(d) && d.transfer.invite.peerId === invite.peerId && isLive(d));
   return existing ?? add((key) => DirectTransfer.join(invite, handlersFor(key), me()));
 }
 
@@ -307,7 +351,7 @@ export function sendFiles(key: string, files: File[]): string | undefined {
   const total = files.reduce((n, f) => n + f.size, 0);
   d.messages.push({ id, dir: 'out', at: Date.now(), kind: 'files', files, meta: fileInfo(files), done: 0, total, status: 'queued', current: files[0].name });
   touch(d);
-  history.saveFiles(d.key, id, files);
+  if (isDirect(d)) history.saveFiles(d.key, id, files);
   save();
   return id;
 }
@@ -335,7 +379,7 @@ export function endDevice(key: string) {
 export function forget(key: string) {
   const d = getDevice(key);
   if (!d) return;
-  if (isLive(d)) d.transfer.shutdown();
+  if (isLive(d) || !isDirect(d)) d.transfer.shutdown();
   hub.devices = hub.devices.filter((x) => x.key !== key);
   if (hub.notice?.device === key) hub.notice = null;
   history.deleteDevice(key);
@@ -362,7 +406,7 @@ interface Saved {
 
 function save() {
   if (typeof sessionStorage === 'undefined') return;
-  const saved: Saved[] = liveDevices().map((d) => ({
+  const saved: Saved[] = liveDevices().filter(isDirect).map((d) => ({
     key: d.key,
     role: d.transfer.role,
     peerId: d.transfer.invite.peerId,
@@ -421,7 +465,7 @@ function restore() {
 function tick() {
   const now = (hub.now = Date.now());
   for (const d of hub.devices) {
-    if (!isLive(d) || now - d.lastActive < IDLE_MS) continue;
+    if (!isDirect(d) || !isLive(d) || now - d.lastActive < IDLE_MS) continue;
     if (d.paired) d.transfer.end('idle');
     else {
       d.transfer.shutdown();
@@ -438,7 +482,7 @@ if (typeof window !== 'undefined') {
   // Leaving the page drops the connections at once; the other side waits for this page to come back.
   addEventListener('pagehide', () => {
     save();
-    for (const d of hub.devices) d.transfer.shutdown();
+    for (const d of hub.devices) if (isDirect(d)) d.transfer.shutdown();
   });
   // Back from the browser's page cache, the connections are gone: start again from what was saved.
   addEventListener('pageshow', (e) => (e as PageTransitionEvent).persisted && location.reload());
