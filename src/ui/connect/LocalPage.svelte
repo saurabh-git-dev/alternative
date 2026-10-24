@@ -1,5 +1,5 @@
 <!--
-  Local share (native apps only): devices on the same network, found
+  Local share (native apps only, a tab of Connect): devices on the same network, found
   without the internet (see connect/local.svelte.ts).
 
   - Saved devices: copies of this app you paired with a PIN. They stay

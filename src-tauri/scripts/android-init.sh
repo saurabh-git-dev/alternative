@@ -27,3 +27,33 @@ for permission in "${PERMISSIONS[@]}"; do
 done
 sed -i "0,/<application/s##${lines}<application#" "$manifest"
 grep -n "uses-permission" "$manifest"
+
+# The app draws edge to edge (forced from Android 15), so keep the page clear
+# of the status bar, navigation bar, notch and keyboard by padding the
+# content view by those insets.
+activity=$(find src-tauri/gen/android/app/src/main -name MainActivity.kt | head -1)
+package=$(grep -m1 '^package ' "$activity")
+cat > "$activity" <<KOTLIN
+$package
+
+import android.os.Bundle
+import android.view.View
+import androidx.activity.enableEdgeToEdge
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+
+class MainActivity : TauriActivity() {
+  override fun onCreate(savedInstanceState: Bundle?) {
+    enableEdgeToEdge()
+    super.onCreate(savedInstanceState)
+    val root = findViewById<View>(android.R.id.content)
+    ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+      val types = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime()
+      val bars = insets.getInsets(types)
+      view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+      WindowInsetsCompat.CONSUMED
+    }
+  }
+}
+KOTLIN
+echo "Patched $activity"
