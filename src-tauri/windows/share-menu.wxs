@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Share with Tools" in Explorer's right-click menu, for the MSI (the
+     installer .exe does the same in share-menu.nsh). The path is spelled
+     out rather than [#Path] (the .exe's file id in Tauri's WiX template),
+     whose component sits in another feature (ICE69). The .exe keeps the
+     cargo binary's name, tools.exe. -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="ShareWithToolsMenu" Guid="*">
+        <RegistryKey Root="HKCR" Key="*\shell\ShareWithTools">
+          <RegistryValue Type="string" Value="Share with Tools" KeyPath="yes" />
+          <RegistryValue Type="string" Name="Icon" Value="[INSTALLDIR]tools.exe" />
+          <RegistryValue Type="string" Key="command" Value="&quot;[INSTALLDIR]tools.exe&quot; &quot;%1&quot;" />
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

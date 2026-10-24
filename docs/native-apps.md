@@ -36,6 +36,26 @@ with them directly (see [local-share.md](local-share.md)).
 - Linux uses the system WebKitGTK rather than Chromium: video tools fall back
   to ffmpeg.wasm where WebCodecs is missing.
 
+## Share with Tools
+
+Files can be shared to the app from outside it (`src-tauri/src/shared.rs`,
+`src/ui/connect/ShareDialog.svelte`):
+
+- **Windows**: "Share with Tools" in Explorer's right-click menu for any
+  file (Windows 11: under "Show more options"). Added by the installer
+  (`src-tauri/windows/share-menu.nsh`) and the MSI (`share-menu.wxs`).
+- **Linux**: Tools is listed under "Open With" for common file types
+  (`src-tauri/linux/tools.desktop`, `Exec=tools %F`).
+- **Android**: "Share with Tools" in the share sheet, for one or several
+  files of any type, or text (`src-tauri/scripts/android-init.sh` adds the
+  intent filters; MainActivity copies the files into the app).
+
+A second launch with files hands them to the running app
+(`tauri-plugin-single-instance`). The app then asks where they go: a new
+device by QR code (P2P), a device connected by code, a saved Local share
+device (sent when it is back, if it is away, for up to 10 minutes), a
+nearby device, a browser on the Wi-Fi (A2B), or a tool.
+
 ## Releases
 
 Every merge to `main` runs `.github/workflows/release.yml`:

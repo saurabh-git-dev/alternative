@@ -1,0 +1,10 @@
+[Desktop Entry]
+Categories={{categories}}
+Comment={{comment}}
+Exec={{exec}} %F
+StartupWMClass={{exec}}
+Icon={{icon}}
+Name={{name}}
+Terminal=false
+Type=Application
+MimeType=application/pdf;image/png;image/jpeg;image/webp;image/gif;image/avif;image/heic;image/svg+xml;image/bmp;image/tiff;video/mp4;video/webm;video/quicktime;video/x-matroska;audio/mpeg;audio/mp4;audio/wav;audio/ogg;text/plain;text/csv;application/json;application/zip;application/octet-stream;

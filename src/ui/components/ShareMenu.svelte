@@ -7,6 +7,8 @@
   - "QR code or link" / "Link": only when the file is small enough to travel
     inside a link (see ui/share-target.ts);
   - "Other apps…": the system share sheet, where the browser has one.
+  In the native apps it also lists Local share devices: saved ones (sent
+  at once, or when they're back within 10 minutes) and nearby ones.
   `files` can be a function, for results that are costly to load (e.g. a
   saved recording); they are then loaded on the first pick. With `text`
   (an IT tool's output), a connected device gets plain text as a chat
@@ -17,6 +19,8 @@
   import type { FileData } from '../../core/types';
   import { displayName, hub, liveDevices, newHost, sendFiles, sendText } from '../connect/devices.svelte';
   import { fitsLink, fitsQr, openSharePage, toFile } from '../share-target';
+  import { ensureDevice, localHub } from '../connect/local.svelte';
+  import type { LocalDevice } from '../../core/local';
 
   type Source = (FileData | File)[] | (() => Promise<(FileData | File)[]>);
 
@@ -44,6 +48,8 @@
   let byHover = false;
 
   const devices = $derived(liveDevices());
+  /** Native apps: Local share devices, saved (online or not) then nearby. */
+  const localDevices = $derived(localHub.devices.filter((d) => (d.paired && d.ours) || d.online));
   /** A single file that is already in memory can go by link or QR code. */
   const single = $derived(Array.isArray(files) && files.length === 1 && !(files[0] instanceof File) ? (files[0] as FileData) : null);
   const qr = $derived(open && single ? fitsQr(single) : false);
@@ -62,6 +68,13 @@
   async function toDevice(key: string) {
     const asMessage = !!text && text.length <= MAX_CHAT_TEXT && (!single || single.type === 'text/plain');
     const id = asMessage ? sendText(key, text!) : sendFiles(key, await resolve());
+    if (id) hub.notice = { device: key, message: id };
+    open = false;
+  }
+
+  async function toLocal(view: LocalDevice) {
+    const key = ensureDevice(view).key;
+    const id = sendFiles(key, await resolve());
     if (id) hub.notice = { device: key, message: id };
     open = false;
   }
@@ -156,6 +169,17 @@
             <span class="dot" class:ok={d.conn.state === 'connected'} aria-hidden="true"></span>
             <span class="what">{displayName(d)}</span>
             {#if d.conn.state !== 'connected'}<span class="muted hint">sends on reconnect</span>{/if}
+          </button>
+        {/each}
+        <hr />
+      {/if}
+      {#if localDevices.length}
+        <p class="group">On this network</p>
+        {#each localDevices as d (d.fingerprint)}
+          <button role="menuitem" onclick={() => toLocal(d)}>
+            <span class="dot" class:ok={d.paired && d.ours ? d.linked : d.online} aria-hidden="true"></span>
+            <span class="what">{d.alias}</span>
+            {#if d.paired && d.ours && !d.linked}<span class="muted hint">sends when back</span>{:else if !(d.paired && d.ours)}<span class="muted hint">asks first</span>{/if}
           </button>
         {/each}
         <hr />
