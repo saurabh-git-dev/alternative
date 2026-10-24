@@ -92,7 +92,7 @@ pub async fn read_json<T: serde::de::DeserializeOwned>(req: Request<HyperBody>) 
     serde_json::from_slice(&body).ok()
 }
 
-fn query(req: &Request<HyperBody>) -> HashMap<String, String> {
+pub(super) fn query(req: &Request<HyperBody>) -> HashMap<String, String> {
     req.uri()
         .query()
         .unwrap_or("")
@@ -187,14 +187,14 @@ async fn prepare_upload(local: Arc<Local>, caller: Caller, req: Request<HyperBod
 }
 
 /// A file name that is safe to create in the downloads folder.
-fn clean_name(name: &str) -> String {
+pub(super) fn clean_name(name: &str) -> String {
     let base: String = name.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() { '_' } else { c }).collect();
     let base = base.trim().trim_start_matches('.').to_string();
     if base.is_empty() { "file".into() } else { base }
 }
 
 /// `dir/name`, or `dir/name (2).ext` if that exists.
-fn unique_path(dir: &Path, name: &str) -> PathBuf {
+pub(super) fn unique_path(dir: &Path, name: &str) -> PathBuf {
     let first = dir.join(name);
     if !first.exists() {
         return first;

@@ -200,8 +200,16 @@ export function fromBase43(text: string): Uint8Array {
 // Links and QR capacity
 // ---------------------------------------------------------------------------
 
-/** `https://host/app/` for the running app, without any fragment. */
+/** Where the site is published; links made in the native apps point here. */
+export const SITE_URL = 'https://saurabh-git-dev.github.io/alternative/';
+
+/**
+ * `https://host/app/` for the running app, without any fragment. Inside the
+ * native apps the page's own address (`tauri.localhost`) means nothing to
+ * another device, so links use the published site, same section.
+ */
 export function appUrl(location: { origin: string; pathname: string }): string {
+  if (/^(https?:\/\/tauri\.localhost|tauri:\/\/localhost)$/.test(location.origin)) return SITE_URL.replace(/\/$/, '') + location.pathname;
   return location.origin + location.pathname;
 }
 

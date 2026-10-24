@@ -59,6 +59,8 @@ export interface LocalEvents {
   'local://progress': { session: string; fingerprint: string; done: number; total: number; file: string };
   'local://received': { session: string; fingerprint: string; alias: string; files: SavedFile[] };
   'local://cancelled': { session: string };
+  /** A browser on the network sent a file (A2B, see `webStart`). */
+  'local://web-received': { ip: string; name: string; path: string; size: number; fileType: string };
 }
 
 export function on<E extends keyof LocalEvents>(event: E, handler: (payload: LocalEvents[E]) => void): void {
@@ -78,6 +80,45 @@ export const forget = (fingerprint: string) => call<void>('local_forget', { fing
 export const linkSend = (fingerprint: string, data: unknown) => call<boolean>('local_link_send', { fingerprint, data });
 export const answer = (request: string, accept: boolean) => call<void>('local_answer', { request, accept });
 export const reveal = (path: string) => call<void>('local_reveal', { path });
+
+/** A file in the received folder. */
+export interface ReceivedFile extends SavedFile {
+  /** Milliseconds since 1970. */
+  modified: number;
+}
+
+export const received = () => call<ReceivedFile[]>('local_received');
+export const deleteFile = (path: string) => call<void>('local_delete', { path });
+export const clearReceived = () => call<number>('local_clear');
+/** Android: copy to the phone's Downloads folder (received files live in the app's own folder there). */
+export const saveToDownloads = (path: string) => call<string>('local_save_to_downloads', { path });
+
+/** On Android, received files need copying to Downloads; on computers they're already there. */
+export const isAndroid = () => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+
+/** A2B: a page for browsers on this network, served by the app while switched on. */
+export interface WebShare {
+  key: string;
+  port: number;
+  /** One per network this device is on. */
+  urls: string[];
+}
+
+export const webStart = () => call<WebShare>('local_web_start');
+export const webStop = () => call<void>('local_web_stop');
+export const webUnoffer = (id: string) => call<void>('local_web_unoffer', { id });
+
+/** Offer a file to the browsers; resolves with its id once it's all copied in. */
+export async function webOffer(file: File, progress: (done: number) => void): Promise<string> {
+  const id = await call<string>('local_web_offer', { name: file.name, size: file.size });
+  for (let offset = 0; offset < file.size; offset += CHUNK) {
+    const bytes = new Uint8Array(await file.slice(offset, offset + CHUNK).arrayBuffer());
+    const last = offset + CHUNK >= file.size;
+    await invoke('local_web_offer_chunk', bytes, { headers: { 'x-id': id, 'x-last': last ? '1' : '0' } });
+    progress(offset + bytes.length);
+  }
+  return id;
+}
 
 /** Why a send didn't happen, in words. */
 export function sendError(code: string, name: string): string {

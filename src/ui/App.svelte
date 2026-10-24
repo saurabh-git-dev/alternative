@@ -18,8 +18,10 @@
   `#/connect…` routes, are Connect with voice and video calls (see
   connect/calls.svelte.ts).
 
-  In the native apps (src-tauri/) Connect also has a Local share tab,
-  `#/local[/…]` (see connect/LocalPage.svelte): devices on the same network, paired with
+  In the native apps (src-tauri/) Connect has two more tabs (see
+  connect/ConnectTabs.svelte): A2B, a page for browsers on the network
+  (`#/lan`, connect/BrowserSharePage.svelte), and A2A, Local share with
+  other apps (`#/local[/…]`, connect/LocalPage.svelte): devices on the same network, paired with
   a PIN, with chat, files and calls. Calls are on everywhere in the apps.
 -->
 <script lang="ts">
@@ -33,6 +35,7 @@
   import ConnectPage from './connect/ConnectPage.svelte';
   import LocalPage from './connect/LocalPage.svelte';
   import ConnectTabs from './connect/ConnectTabs.svelte';
+  import BrowserSharePage from './connect/BrowserSharePage.svelte';
   import AskDialog from './connect/AskDialog.svelte';
   import PairPinDialog from './connect/PairPinDialog.svelte';
   import { localHub, startLocal } from './connect/local.svelte';
@@ -107,6 +110,8 @@
           ? 'share'
           : native && (hash === '#/local' || hash.startsWith('#/local/'))
           ? 'local'
+          : native && hash === '#/lan'
+          ? 'lan'
           : hash === '#/connect' || hash.startsWith('#/connect/') || hash === '#/scan' || hash.startsWith('#/direct') || hash.startsWith(`#${DIRECT_ROUTE}`)
           ? 'connect'
           : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : section === 'chat' ? 'connect' : `${section}-home`,
@@ -135,6 +140,8 @@
         ? 'Share as link or QR · Tools'
         : page === 'local'
         ? 'Local share · Tools'
+        : page === 'lan'
+        ? 'Share with a browser · Tools'
         : page === 'connect'
         ? section === 'chat' ? 'Chat' : 'Connect devices · Tools'
         : 'Shared file · Tools';
@@ -184,7 +191,7 @@
   <a
     class="scan"
     class:live={connected + nearbyOnline > 0}
-    class:active={page === 'connect' || page === 'local'}
+    class:active={page === 'connect' || page === 'local' || page === 'lan'}
     href="#/connect"
     title={connected + nearbyOnline ? `${connected + nearbyOnline} device${connected + nearbyOnline > 1 ? 's' : ''} connected` : live ? 'Reconnecting to your device' : 'Connect your phone or another computer to send files and text'}
   >
@@ -238,6 +245,9 @@
     {#key hash}
       <ConnectPage {hash} onOpen={openTool} calls={section === 'chat'} />
     {/key}
+  {:else if page === 'lan'}
+    <ConnectTabs active="lan" />
+    <BrowserSharePage onOpen={openTool} />
   {:else if page === 'local'}
     <ConnectTabs active="local" />
     <LocalPage {hash} onOpen={openTool} />

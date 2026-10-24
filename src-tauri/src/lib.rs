@@ -40,6 +40,15 @@ pub fn run() {
             local::commands::local_send_finish,
             local::commands::local_read_file,
             local::commands::local_reveal,
+            local::commands::local_received,
+            local::commands::local_delete,
+            local::commands::local_clear,
+            local::commands::local_save_to_downloads,
+            local::commands::local_web_start,
+            local::commands::local_web_stop,
+            local::commands::local_web_offer,
+            local::commands::local_web_offer_chunk,
+            local::commands::local_web_unoffer,
         ])
         .setup(|app| {
             // WebKitGTK ships with getUserMedia and WebRTC switched off.

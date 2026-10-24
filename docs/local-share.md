@@ -15,9 +15,26 @@ matchmaker), which works the same as before in the apps and on the site.
   accepts), and can send files here.
 - Files arriving from a device you haven't paired, or over 1 GB from any
   device, ask first. The 1 GB question also applies to Connect (WebRTC).
-- Received files are saved to `Downloads/Tools` (computers) or `Download`
-  (Android). Files up to 256 MB also load into the chat for preview and the
-  tools; every file has **Show in folder**.
+- Received files are listed under **Received files** (see below). Files up
+  to 256 MB also load into the chat for preview and the tools.
+
+## Connect tabs in the apps
+
+| Tab | What | Where |
+|---|---|---|
+| P2P | QR code, WebRTC through a matchmaker, any device with a browser. Links made in the app point to the published site, since `tauri.localhost` means nothing elsewhere (`appUrl` in `src/core/share.ts`). | `#/connect` |
+| A2B (LAN) | The app serves a page on the network (HTTP, port 53318) for browsers without the app: they send files here (you accept) and download files offered here. Each switch-on makes a new key, carried in the QR code; requests without it are refused. | `#/lan`, `src-tauri/src/local/web.rs` |
+| A2A (LAN) | Local share with other copies of this app (paired) and LocalSend apps, described below. | `#/local` |
+
+## Received files
+
+Everything received over the network goes to one folder, listed under
+**Received files** on the A2A and A2B tabs, where each file can be previewed,
+opened in a tool, deleted, or all cleared (`src-tauri/src/local/files.rs`).
+On computers the folder is `Downloads/Tools`. On Android it is the app's own
+folder, which other apps can't see, so each file has **Save to Downloads**:
+it copies the file to `Download/Tools` through MediaStore (Android 10+, no
+storage permission needed).
 
 ## Pieces
 
