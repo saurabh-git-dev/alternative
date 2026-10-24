@@ -18,8 +18,8 @@
   `#/connect…` routes, are Connect with voice and video calls (see
   connect/calls.svelte.ts).
 
-  In the native apps (src-tauri/) there is also Local share, `#/local[/…]`
-  (see connect/LocalPage.svelte): devices on the same network, paired with
+  In the native apps (src-tauri/) Connect also has a Local share tab,
+  `#/local[/…]` (see connect/LocalPage.svelte): devices on the same network, paired with
   a PIN, with chat, files and calls. Calls are on everywhere in the apps.
 -->
 <script lang="ts">
@@ -32,6 +32,7 @@
   import Compare from './pages/Compare.svelte';
   import ConnectPage from './connect/ConnectPage.svelte';
   import LocalPage from './connect/LocalPage.svelte';
+  import ConnectTabs from './connect/ConnectTabs.svelte';
   import AskDialog from './connect/AskDialog.svelte';
   import PairPinDialog from './connect/PairPinDialog.svelte';
   import { localHub, startLocal } from './connect/local.svelte';
@@ -182,28 +183,21 @@
   <!-- Connected devices stay connected across pages; a green dot (or a count, for several) shows it. -->
   <a
     class="scan"
-    class:live={connected > 0}
-    class:active={page === 'connect'}
+    class:live={connected + nearbyOnline > 0}
+    class:active={page === 'connect' || page === 'local'}
     href="#/connect"
-    title={connected ? `${connected} device${connected > 1 ? 's' : ''} connected` : live ? 'Reconnecting to your device' : 'Connect your phone or another computer to send files and text'}
+    title={connected + nearbyOnline ? `${connected + nearbyOnline} device${connected + nearbyOnline > 1 ? 's' : ''} connected` : live ? 'Reconnecting to your device' : 'Connect your phone or another computer to send files and text'}
   >
     <span class="link-icon" aria-hidden="true">🔗</span>
     <span class="label">Connect</span>
-    {#if connected > 1}
-      <span class="count">{connected}</span>
-    {:else if connected === 1}
+    {#if connected + nearbyOnline > 1}
+      <span class="count">{connected + nearbyOnline}</span>
+    {:else if connected + nearbyOnline === 1}
       <span class="dot" aria-hidden="true"></span>
     {:else if live}
       <span class="dot waiting" aria-hidden="true"></span>
     {/if}
   </a>
-  {#if native}
-    <a class="scan" class:live={nearbyOnline > 0} class:active={page === 'local'} href="#/local" title="Local share: devices on this network, no internet needed">
-      <span class="link-icon" aria-hidden="true">📡</span>
-      <span class="label">Local share</span>
-      {#if nearbyOnline}<span class="dot" aria-hidden="true"></span>{/if}
-    </a>
-  {/if}
   {#if canInstall()}
     <button class="install" onclick={install} title="Install Tools as an app. It opens in its own window and works offline.">
       ⬇️ <span>Install</span>
@@ -240,10 +234,12 @@
   {:else if page === 'share'}
     <Share />
   {:else if page === 'connect'}
+    {#if native}<ConnectTabs active="connect" />{/if}
     {#key hash}
       <ConnectPage {hash} onOpen={openTool} calls={section === 'chat'} />
     {/key}
   {:else if page === 'local'}
+    <ConnectTabs active="local" />
     <LocalPage {hash} onOpen={openTool} />
   {:else if page === 'received'}
     <Received {hash} onOpen={openTool} />

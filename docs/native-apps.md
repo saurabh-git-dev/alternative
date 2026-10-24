@@ -28,7 +28,9 @@ with them directly (see [local-share.md](local-share.md)).
   switches on WebKitGTK's media stream and WebRTC settings, which are off by
   default; on Android, `src-tauri/scripts/android-init.sh` adds the camera,
   microphone and network permissions, and the system asks for the camera and
-  microphone the first time.
+  microphone the first time. It also pads the app by the system bars'
+  insets, since Android draws apps edge to edge, so the header never sits
+  under the status bar.
 - Local share runs in the native side (`src-tauri/src/local/`), started with
   the app; on Android it holds a Wi-Fi multicast lock so discovery works.
 - Linux uses the system WebKitGTK rather than Chromium: video tools fall back

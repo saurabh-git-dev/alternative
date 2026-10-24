@@ -1,10 +1,10 @@
 # Local share
 
-Local share is a tab in the Windows, Linux and Android apps (`#/local`,
+Local share is a tab of Connect in the Windows, Linux and Android apps (`#/local`,
 `src/ui/connect/LocalPage.svelte`). It finds devices on the same network
 and talks to them directly, with no internet and no server. It sits next to
-Connect (`#/connect`, WebRTC through a matchmaker), which works the same as
-before in the apps and on the site.
+the usual Connect tab (`#/connect`, a QR code and WebRTC through a
+matchmaker), which works the same as before in the apps and on the site.
 
 - **Nearby** lists every device on the network right now: other copies of
   this app and [LocalSend](https://localsend.org) apps.
