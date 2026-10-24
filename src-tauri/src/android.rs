@@ -115,3 +115,23 @@ fn put_int(env: &mut jni::JNIEnv<'_>, values: &JObject<'_>, key: &str, value: i3
     env.call_method(values, "put", "(Ljava/lang/String;Ljava/lang/Integer;)V", &[(&key).into(), (&boxed).into()])?;
     Ok(())
 }
+
+/// The app's private files folder (`Context.getFilesDir()`).
+pub fn files_dir() -> Option<std::path::PathBuf> {
+    let ctx = ndk_context::android_context();
+    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }.ok()?;
+    let mut env = vm.attach_current_thread().ok()?;
+    let result = (|| -> jni::errors::Result<String> {
+        let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+        let dir = env.call_method(&context, "getFilesDir", "()Ljava/io/File;", &[])?.l()?;
+        let path = env.call_method(&dir, "getAbsolutePath", "()Ljava/lang/String;", &[])?.l()?;
+        Ok(env.get_string(&path.into())?.into())
+    })();
+    match result {
+        Ok(p) => Some(p.into()),
+        Err(_) => {
+            let _ = env.exception_clear();
+            None
+        }
+    }
+}

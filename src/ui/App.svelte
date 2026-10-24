@@ -36,6 +36,8 @@
   import LocalPage from './connect/LocalPage.svelte';
   import ConnectTabs from './connect/ConnectTabs.svelte';
   import BrowserSharePage from './connect/BrowserSharePage.svelte';
+  import ShareDialog from './connect/ShareDialog.svelte';
+  import { startIncomingShare } from './connect/incoming-share.svelte';
   import AskDialog from './connect/AskDialog.svelte';
   import PairPinDialog from './connect/PairPinDialog.svelte';
   import { localHub, startLocal } from './connect/local.svelte';
@@ -61,7 +63,10 @@
   const native = isNativeApp();
   let hash = $state(location.hash);
   if (section === 'chat' || native) enableCalls();
-  if (native) startLocal();
+  if (native) {
+    startLocal();
+    startIncomingShare();
+  }
   let theme = $state<Theme>(loadTheme());
   /** Files dropped on the home page, handed to the tool the user picks. */
   let pending = $state<File[]>([]);
@@ -261,7 +266,10 @@
 <Notice onOpen={openTool} />
 {#if section === 'chat' || native}<CallPanel />{/if}
 <AskDialog />
-{#if native}<PairPinDialog />{/if}
+{#if native}
+  <PairPinDialog />
+  <ShareDialog onOpen={openTool} />
+{/if}
 {#if hub.editing}
   {#key hub.editing.file}
     <TextEditor file={hub.editing.file} device={hub.editing.device} />

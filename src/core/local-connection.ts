@@ -12,6 +12,8 @@
  *   the same network the devices reach each other directly. Its offer and
  *   answer carry all their addresses (see `settled` in core/call.ts).
  * - LocalSend devices only take files: no text, calls or name changes.
+ * - Files sent while the device is away wait for it, for up to
+ *   `QUEUE_FOR_MS`; after that they are dropped as expired.
  */
 import type { Connection } from './connection';
 import type { Role } from './direct-crypto';
@@ -19,11 +21,15 @@ import type { ConnectionState, Handlers } from './direct';
 import * as local from './local';
 import type { LocalDevice, SavedFile } from './local';
 
+/** How long files wait for a device that is away before they expire. */
+export const QUEUE_FOR_MS = 10 * 60_000;
+
 export class LocalConnection implements Connection {
   readonly kind = 'local';
   readonly role: Role;
   private state: ConnectionState['state'] | '' = '';
-  private outbox: { id: string; files: File[] }[] = [];
+  private outbox: { id: string; files: File[]; at: number }[] = [];
+  private expiry = setInterval(() => this.expire(), 15_000);
   private sending = false;
   private texts = new Map<string, { text: string; at: number }>();
   private pc: RTCPeerConnection | null = null;
@@ -69,12 +75,23 @@ export class LocalConnection implements Connection {
 
   send(files: File[]): string {
     const id = crypto.randomUUID();
-    this.outbox.push({ id, files });
+    this.outbox.push({ id, files, at: Date.now() });
     this.pump();
     return id;
   }
 
+  /** Drop files that waited too long for the device (not one already going). */
+  private expire() {
+    const now = Date.now();
+    const keep = this.outbox.filter((item, i) => (this.sending && i === 0) || now - item.at < QUEUE_FOR_MS);
+    for (const item of this.outbox) {
+      if (!keep.includes(item)) this.handlers.onDeclined?.(item.id, `Not sent: ${this.device.alias} didn't come back within ${QUEUE_FOR_MS / 60_000} minutes.`);
+    }
+    this.outbox = keep;
+  }
+
   private async pump() {
+    this.expire();
     if (this.sending) return;
     this.sending = true;
     try {
@@ -188,6 +205,7 @@ export class LocalConnection implements Connection {
   end() {}
 
   shutdown() {
+    clearInterval(this.expiry);
     this.pc?.close();
     this.pc = null;
   }

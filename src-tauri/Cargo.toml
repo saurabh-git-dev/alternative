@@ -42,6 +42,10 @@ tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring
 jni = "0.21"
 ndk-context = "0.1"
 
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+# "Share with Tools" while the app is open goes to the running copy.
+tauri-plugin-single-instance = "2"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # Same version Tauri's webview uses; only for turning on camera and WebRTC.
 webkit2gtk = { version = "2", features = ["v2_40"] }

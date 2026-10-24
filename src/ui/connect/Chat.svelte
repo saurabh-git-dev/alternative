@@ -110,7 +110,7 @@
 
   function status(m: Message): string {
     if (m.status === 'active') return `${formatBytes(m.done)} of ${formatBytes(m.total)}`;
-    if (m.status === 'queued') return device.conn.state === 'connected' ? (m.kind === 'files' && !direct ? 'Waiting for them to accept…' : 'Sending…') : direct ? 'Waiting for connection' : 'Will send when the device is back';
+    if (m.status === 'queued') return device.conn.state === 'connected' ? (m.kind === 'files' && !direct ? 'Waiting for them to accept…' : 'Sending…') : direct ? 'Waiting for connection' : 'Will send when the device is back (within 10 min)';
     if (m.status === 'interrupted') return 'Interrupted';
     if (m.status === 'declined') return m.note ?? 'Declined';
     if (m.dir === 'in' && m.saved) return android ? 'Received' : 'Saved to Downloads';

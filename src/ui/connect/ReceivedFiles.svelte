@@ -24,7 +24,7 @@
   let note = $state('');
 
   async function load() {
-    files = await local.received().catch(() => []);
+    files = (await local.received().catch(() => null)) ?? [];
   }
 
   // Again whenever something arrives.
