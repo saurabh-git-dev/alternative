@@ -28,7 +28,9 @@ export const localHub = $state<{
   pin: { fingerprint: string; alias: string; pin: string; until: number } | null;
   /** The last pairing that ended on this side (to close the PIN), with whether it worked. */
   paired: { fingerprint: string; ok: boolean } | null;
-}>({ ready: false, error: '', fingerprint: '', devices: [], pin: null, paired: null });
+  /** Goes up whenever a file is saved to the received folder (see ReceivedFiles.svelte). */
+  filesChanged: number;
+}>({ ready: false, error: '', fingerprint: '', devices: [], pin: null, paired: null, filesChanged: 0 });
 
 export const keyOf = (fingerprint: string) => `local:${fingerprint}`;
 
@@ -147,7 +149,11 @@ export function startLocal() {
     connectionOf(inc.fingerprint)?.onIncoming(inc.session, inc.total, inc.files[0]?.name ?? '');
   });
   local.on('local://progress', (p) => connectionOf(p.fingerprint)?.onProgress(p.session, p.done, p.total, p.file));
-  local.on('local://received', (r) => connectionOf(r.fingerprint)?.onReceived(r.session, r.files));
+  local.on('local://received', (r) => {
+    connectionOf(r.fingerprint)?.onReceived(r.session, r.files);
+    localHub.filesChanged++;
+  });
+  local.on('local://web-received', () => localHub.filesChanged++);
   local.on('local://cancelled', ({ session }) => {
     for (const d of hub.devices) if (d.transfer instanceof LocalConnection) d.transfer.onCancelled(session);
   });

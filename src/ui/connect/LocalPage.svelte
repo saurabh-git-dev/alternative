@@ -15,6 +15,7 @@
   import { untrack } from 'svelte';
   import Chat from './Chat.svelte';
   import MyName from './MyName.svelte';
+  import ReceivedFiles from './ReceivedFiles.svelte';
   import { displayName, getDevice, hub } from './devices.svelte';
   import { enterPin, ensureDevice, forgetDevice, keyOf, localHub, refresh, requestPin, viewOf } from './local.svelte';
   import type { LocalDevice } from '../../core/local';
@@ -175,10 +176,12 @@
         <li>Tap it and choose <strong>Pair with a PIN</strong>; type the PIN the other device shows.</li>
         <li>It's saved: chat, call and send files any time both are on the network, even with no internet.</li>
       </ol>
-      <p class="muted small">LocalSend apps (Windows, Mac, Linux, Android, iPhone) are listed too: tap one to send it files. Files sent to this device are saved in your Downloads folder; anything over 1 GB, or from a device you haven't paired, asks you first.</p>
+      <p class="muted small">LocalSend apps (Windows, Mac, Linux, Android, iPhone) are listed too: tap one to send it files. Files sent to this device are listed under Received files below; anything over 1 GB, or from a device you haven't paired, asks you first.</p>
     </section>
   {/if}
 </div>
+
+<ReceivedFiles {onOpen} />
 
 <style>
   .head {

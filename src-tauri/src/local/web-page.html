@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Send to {{ALIAS}} · Tools</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f5f6fa; --card: #fff; --text: #1d2130; --muted: #646b80; --accent: #4f46e5; --soft: #eef0ff; --border: #e3e5ee; --ok: #15803d; --bad: #b91c1c; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #12141b; --card: #1b1e28; --text: #e8eaf2; --muted: #9aa1b5; --accent: #8b85ff; --soft: #262a40; --border: #2c3040; --ok: #4ade80; --bad: #f87171; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; display: grid; gap: 16px; }
+  h1 { margin: 0; font-size: 22px; }
+  h2 { margin: 0 0 10px; font-size: 16px; }
+  p { margin: 0; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+  .drop { display: grid; place-items: center; gap: 8px; padding: 28px 16px; border: 2px dashed var(--border); border-radius: 12px; text-align: center; cursor: pointer; }
+  .drop.over { border-color: var(--accent); background: var(--soft); }
+  .btn { display: inline-block; padding: 9px 16px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
+  .btn.ghost { background: var(--soft); color: var(--text); }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  li { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+  .state { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .state.ok { color: var(--ok); }
+  .state.bad { color: var(--bad); }
+  .bar { height: 4px; border-radius: 9px; background: var(--soft); overflow: hidden; margin-top: 4px; }
+  .bar div { height: 100%; width: 0; background: var(--accent); }
+  .row { display: grid; flex: 1; min-width: 0; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>📡 {{ALIAS}}</h1>
+    <p class="muted">Connected to the Tools app on this network. Files go straight to it, nothing is uploaded to the internet.</p>
+  </div>
+
+  <section class="card">
+    <h2>Send files to {{ALIAS}}</h2>
+    <label class="drop" id="drop">
+      <input id="pick" type="file" multiple hidden />
+      <span>Drop files here, or</span>
+      <span class="btn">Choose files</span>
+    </label>
+    <ul id="sent" style="margin-top:12px"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Files from {{ALIAS}}</h2>
+    <ul id="offered"><li class="muted">Nothing offered yet. Files added in the app show up here.</li></ul>
+  </section>
+</main>
+<script>
+  const key = new URLSearchParams(location.search).get('k');
+  const api = (path) => `${path}${path.includes('?') ? '&' : '?'}k=${encodeURIComponent(key)}`;
+  const size = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`);
+  const el = (tag, props = {}, kids = []) => {
+    const e = Object.assign(document.createElement(tag), props);
+    e.append(...kids);
+    return e;
+  };
+
+  const sent = document.getElementById('sent');
+  const drop = document.getElementById('drop');
+  document.getElementById('pick').addEventListener('change', (e) => { send([...e.target.files]); e.target.value = ''; });
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); send([...e.dataTransfer.files]); });
+
+  function upload(url, file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.upload.onprogress = (e) => onProgress(e.loaded);
+      xhr.onload = () => (xhr.status === 200 ? resolve() : reject(new Error(`failed (${xhr.status})`)));
+      xhr.onerror = () => reject(new Error('connection lost'));
+      xhr.send(file);
+    });
+  }
+
+  async function send(files) {
+    if (!files.length) return;
+    const rows = files.map((f) => {
+      const state = el('span', { className: 'state', textContent: 'Waiting for them to accept…' });
+      const bar = el('div');
+      const li = el('li', {}, [el('div', { className: 'row' }, [el('span', { className: 'name', textContent: f.name }), el('div', { className: 'bar' }, [bar])]), state]);
+      sent.prepend(li);
+      return { state, bar };
+    });
+    const res = await fetch(api('/api/prepare'), { method: 'POST', body: JSON.stringify({ files: files.map((f) => ({ name: f.name, size: f.size, type: f.type })) }) }).catch(() => null);
+    if (!res || !res.ok) {
+      for (const r of rows) { r.state.textContent = res && res.status === 403 ? 'Declined' : 'Not sent'; r.state.className = 'state bad'; }
+      return;
+    }
+    const { batch } = await res.json();
+    for (const [i, file] of files.entries()) {
+      const r = rows[i];
+      r.state.textContent = 'Sending…';
+      try {
+        await upload(api(`/api/upload?batch=${batch}&file=${i}`), file, (n) => { r.bar.style.width = `${file.size ? (n / file.size) * 100 : 100}%`; r.state.textContent = `${size(n)} of ${size(file.size)}`; });
+        r.bar.style.width = '100%';
+        r.state.textContent = '✓ Sent';
+        r.state.className = 'state ok';
+      } catch (e) {
+        r.state.textContent = e.message;
+        r.state.className = 'state bad';
+      }
+    }
+  }
+
+  const offered = document.getElementById('offered');
+  let shown = '';
+  async function poll() {
+    try {
+      const res = await fetch(api('/api/files'));
+      if (res.status === 403) { location.reload(); return; }
+      const { files } = await res.json();
+      const sig = files.map((f) => f.id).join();
+      if (sig !== shown) {
+        shown = sig;
+        offered.replaceChildren(
+          ...(files.length
+            ? files.map((f) => el('li', {}, [el('span', { className: 'name', textContent: f.name }), el('span', { className: 'state', textContent: size(f.size) }), el('a', { className: 'btn ghost', href: api(`/api/file/${f.id}`), download: f.name, textContent: 'Download' })]))
+            : [el('li', { className: 'muted', textContent: 'Nothing offered yet. Files added in the app show up here.' })]),
+        );
+      }
+    } catch {}
+    setTimeout(poll, 2500);
+  }
+  poll();
+</script>
+</body>
+</html>

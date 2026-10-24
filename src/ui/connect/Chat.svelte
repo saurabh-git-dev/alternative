@@ -15,7 +15,7 @@
   import EditMenu from '../components/EditMenu.svelte';
   import { calls as callState, hardware, startCall } from './calls.svelte';
   import { displayName, endDevice, forget, hub, isDirect, isLive, markRead, resend, secondsLeft, sendFiles, sendText, type Device, type Message } from './devices.svelte';
-  import { reveal } from '../../core/local';
+  import { isAndroid, reveal, saveToDownloads } from '../../core/local';
   import { LocalConnection } from '../../core/local-connection';
 
   let { device, onOpen, calls = false }: { device: Device; onOpen: (id: string, files: File[]) => void; calls?: boolean } = $props();
@@ -28,6 +28,16 @@
   let list = $state<HTMLDivElement>();
 
   const live = $derived(isLive(device));
+  /** Android keeps received files in the app's folder: a button copies one to Downloads. */
+  const android = isAndroid();
+  let savedNote = $state<Record<string, string>>({});
+  async function saveCopy(path: string) {
+    savedNote[path] = 'Saving…';
+    savedNote[path] = await saveToDownloads(path).then(
+      () => '✓ Saved to Downloads',
+      (e: unknown) => String(e),
+    );
+  }
   const direct = $derived(isDirect(device));
   /** Text works (everything but LocalSend devices, which take files only). */
   const texts = $derived(!(device.transfer instanceof LocalConnection) || device.transfer.chat);
@@ -103,7 +113,7 @@
     if (m.status === 'queued') return device.conn.state === 'connected' ? (m.kind === 'files' && !direct ? 'Waiting for them to accept…' : 'Sending…') : direct ? 'Waiting for connection' : 'Will send when the device is back';
     if (m.status === 'interrupted') return 'Interrupted';
     if (m.status === 'declined') return m.note ?? 'Declined';
-    if (m.dir === 'in' && m.saved) return 'Saved to Downloads';
+    if (m.dir === 'in' && m.saved) return android ? 'Received' : 'Saved to Downloads';
     return m.dir === 'out' ? '✓ Delivered' : '';
   }
 </script>
@@ -212,14 +222,22 @@
                   <EditMenu {file} {onOpen} device={m.dir === 'in' ? device.key : undefined} />
                   {#if canShare([file])}<button class="btn" onclick={() => navigator.share({ files: [file] }).catch(() => {})}>Save…</button>{/if}
                   {#if m.saved?.[i]}
+                    {#if android}
+                    <button class="btn" onclick={() => saveCopy(m.saved![i].path)}>{savedNote[m.saved![i].path] ?? '⬇ Save to Downloads'}</button>
+                  {:else}
                     <button class="btn" onclick={() => reveal(m.saved![i].path).catch(() => {})}>📂 Show in folder</button>
+                  {/if}
                   {:else}
                     <button class="btn" onclick={() => download(file, file.name)}>⬇ Download</button>
                   {/if}
                 </div>
               {:else if !file && m.saved?.[i]}
                 <div class="actions">
-                  <button class="btn" onclick={() => reveal(m.saved![i].path).catch(() => {})}>📂 Show in folder</button>
+                  {#if android}
+                    <button class="btn" onclick={() => saveCopy(m.saved![i].path)}>{savedNote[m.saved![i].path] ?? '⬇ Save to Downloads'}</button>
+                  {:else}
+                    <button class="btn" onclick={() => reveal(m.saved![i].path).catch(() => {})}>📂 Show in folder</button>
+                  {/if}
                 </div>
               {/if}
               {#if file && open[key]}

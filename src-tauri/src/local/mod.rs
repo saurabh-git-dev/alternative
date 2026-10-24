@@ -17,6 +17,7 @@
 mod client;
 pub mod commands;
 mod discovery;
+pub mod files;
 mod identity;
 mod link;
 mod pair;
@@ -25,6 +26,7 @@ mod server;
 mod store;
 mod tls;
 mod types;
+pub mod web;
 #[cfg(test)]
 mod tests;
 
@@ -89,6 +91,8 @@ pub struct Local {
     /// Open chat links to paired devices, by fingerprint.
     pub links: Mutex<HashMap<String, (u64, mpsc::UnboundedSender<Vec<u8>>)>>,
     pub dir: PathBuf,
+    /// The page for browsers (web.rs), while switched on.
+    pub web: web::WebState,
 }
 
 impl Local {
@@ -282,6 +286,7 @@ impl Local {
             outgoing: tokio::sync::Mutex::new(HashMap::new()),
             pairing: Mutex::new(HashMap::new()),
             links: Mutex::new(HashMap::new()),
+            web: web::WebState::default(),
             dir,
         }))
     }

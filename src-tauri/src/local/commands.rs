@@ -5,7 +5,7 @@ use std::sync::Arc;
 use serde::Deserialize;
 use tauri::{ipc::Request, AppHandle};
 
-use super::{discovery, link, pair, send, types::*, Local};
+use super::{discovery, files, link, pair, send, types::*, web, Local};
 
 fn local(app: &AppHandle) -> Result<Arc<Local>, String> {
     super::start(app)
@@ -130,13 +130,8 @@ pub async fn local_send_finish(app: AppHandle, transfer: String, cancelled: bool
 /// A received file's bytes, to open it in the tools.
 #[tauri::command]
 pub async fn local_read_file(app: AppHandle, path: String) -> Result<tauri::ipc::Response, String> {
-    let local = local(&app)?;
-    let dir = local.download_dir();
-    let path = std::path::PathBuf::from(path);
     // Only files this feature saved.
-    if !path.starts_with(&dir) && !path.starts_with(local.dir.join("received")) {
-        return Err("not a received file".into());
-    }
+    let path = files::received(&*local(&app)?, &path)?;
     let bytes = tokio::fs::read(&path).await.map_err(|e| e.to_string())?;
     Ok(tauri::ipc::Response::new(bytes))
 }
@@ -146,4 +141,75 @@ pub async fn local_read_file(app: AppHandle, path: String) -> Result<tauri::ipc:
 pub fn local_reveal(app: AppHandle, path: String) -> Result<(), String> {
     let _ = local(&app)?;
     tauri_plugin_opener::reveal_item_in_dir(path).map_err(|e| e.to_string())
+}
+
+/// Received files, newest first.
+#[tauri::command]
+pub fn local_received(app: AppHandle) -> Result<Vec<files::ReceivedFile>, String> {
+    Ok(files::list(&*local(&app)?))
+}
+
+#[tauri::command]
+pub fn local_delete(app: AppHandle, path: String) -> Result<(), String> {
+    files::delete(&*local(&app)?, &path)
+}
+
+/// Delete every received file; returns how many.
+#[tauri::command]
+pub fn local_clear(app: AppHandle) -> Result<usize, String> {
+    Ok(files::clear(&*local(&app)?))
+}
+
+/// Android: copy a received file to the shared Downloads folder (received
+/// files live in the app's own folder there). Returns where it went.
+#[tauri::command]
+pub async fn local_save_to_downloads(app: AppHandle, path: String) -> Result<String, String> {
+    let path = files::received(&*local(&app)?, &path)?;
+    #[cfg(target_os = "android")]
+    {
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
+        let mime = files::guess_type(&name);
+        tauri::async_runtime::spawn_blocking(move || crate::android::save_to_downloads(&path, &name, mime))
+            .await
+            .map_err(|e| e.to_string())?
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        // On computers received files are already in Downloads/Tools.
+        Ok(path.to_string_lossy().into_owned())
+    }
+}
+
+/// Switch on the page for browsers on this network (A2B); returns its addresses and key.
+#[tauri::command]
+pub async fn local_web_start(app: AppHandle) -> Result<web::Started, String> {
+    web::start(local(&app)?).await
+}
+
+#[tauri::command]
+pub fn local_web_stop(app: AppHandle) -> Result<(), String> {
+    web::stop(&*local(&app)?);
+    Ok(())
+}
+
+/// Offer a file to browsers; its bytes follow with `local_web_offer_chunk`.
+#[tauri::command]
+pub fn local_web_offer(app: AppHandle, name: String, size: u64) -> Result<String, String> {
+    web::offer(&*local(&app)?, &name, size)
+}
+
+/// A piece of an offered file: raw bytes as the body, `x-id` and `x-last` headers.
+#[tauri::command]
+pub async fn local_web_offer_chunk(app: AppHandle, request: Request<'_>) -> Result<(), String> {
+    let header = |name: &str| request.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_string);
+    let id = header("x-id").ok_or("missing id")?;
+    let last = header("x-last").as_deref() == Some("1");
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err("expected raw bytes".into()) };
+    web::offer_chunk(&*local(&app)?, &id, bytes, last).await
+}
+
+#[tauri::command]
+pub fn local_web_unoffer(app: AppHandle, id: String) -> Result<(), String> {
+    web::unoffer(&*local(&app)?, &id);
+    Ok(())
 }
