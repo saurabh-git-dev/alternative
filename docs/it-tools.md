@@ -29,7 +29,7 @@ both sections, and the header links each section to the other.
 | `src/it/lib/` | pure logic (hashes, encodings, cron, subnets …), unit-tested in `tests/it-tools.test.ts` |
 | `src/it/transforms/` | text-in, text-out tools declared as data |
 | `src/ui/it/` | the home page, the tool page, the generic `TransformTool`, shared pieces (`OutputActions`, `CopyButton`, `it.css`) |
-| `src/ui/it/tools/` | custom tools that need their own UI (generators, calculators, regex, diff, QR) |
+| `src/ui/it/tools/` | custom tools that need their own UI (generators, calculators, regex, diff, QR code generator and scanner) |
 
 ## Sharing
 

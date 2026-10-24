@@ -46,7 +46,7 @@ utilities, linked from the header switch on every page:
 |---|---|
 | Crypto & secrets | Password & token generator, UUID v4/v7 & ULID, Hash text (MD5, SHA-1/256/384/512), File checksum, HMAC, Encrypt text (AES-256) |
 | Converters | Base64, Date & time, Number bases, Colors, JSON ↔ YAML, JSON ↔ CSV, Case, Text ↔ binary, Unicode escape, Roman numerals, NATO alphabet |
-| Web & network | URL encode/decode, URL parser, HTML entities, JWT decoder, QR code (text, links, Wi-Fi), IPv4 subnets, HTTP status codes, Device info |
+| Web & network | URL encode/decode, URL parser, HTML entities, JWT decoder, QR code generator (text, links, Wi-Fi), QR code scanner (camera or photo: links, Wi-Fi, contacts, events …), IPv4 subnets, HTTP status codes, Device info |
 | Development | JSON formatter, Regex tester, Text diff, Cron explainer, Chmod calculator |
 | Text | Text statistics, Slugify, Lorem ipsum |
 

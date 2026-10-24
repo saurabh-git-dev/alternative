@@ -10,6 +10,20 @@ mod local;
 mod shared;
 
 use tauri::webview::{PermissionKind, PermissionResponse};
+use tauri_plugin_opener::OpenerExt;
+
+/// Open a link from the page in the system's browser or app (a scanned QR
+/// code's web page, email, phone number, map …). The webview can't leave the
+/// bundled site, so links that go elsewhere come here.
+#[tauri::command]
+fn app_open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let scheme = url.split(':').next().unwrap_or_default().to_ascii_lowercase();
+    let plain = !scheme.is_empty() && scheme.chars().all(|c| c.is_ascii_alphanumeric() || "+.-".contains(c));
+    if !plain || ["javascript", "vbscript", "data", "file", "blob", "about"].contains(&scheme.as_str()) {
+        return Err("This kind of link can't be opened.".into());
+    }
+    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -67,6 +81,7 @@ pub fn run() {
             shared::app_shared_files,
             shared::app_read_shared,
             shared::app_done_shared,
+            app_open_url,
         ])
         .setup(|app| {
             // WebKitGTK ships with getUserMedia and WebRTC switched off.

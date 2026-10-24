@@ -18,7 +18,7 @@
   import { handoff } from '../handoff.svelte';
   import { PIPELINE_ROUTE, encodePipeline } from '../../core/pipeline';
   import { loadPipelines } from '../settings';
-  import { RECORD_HOME, VIDEO_HOME } from '../section';
+  import { RECORD_HOME, VIDEO_HOME, itToolHref } from '../section';
 
   let { onOpen }: { onOpen: (id: string, files?: File[]) => void } = $props();
 
@@ -95,6 +95,17 @@
       href: '#/connect',
       takes: (files) => files.length === 0,
       open: () => (location.hash = '#/connect'),
+    },
+    {
+      key: 'qr-scan',
+      icon: '📷',
+      title: 'Scan a QR code',
+      description: 'Read any QR code with the camera or from a photo: links, Wi-Fi, contacts and more.',
+      keywords: 'qr code scanner reader barcode camera wifi contact vcard link',
+      group: 'more',
+      href: itToolHref('qr-scan'),
+      takes: (files) => files.length === 0,
+      open: () => (location.href = itToolHref('qr-scan')),
     },
     {
       key: 'video',
