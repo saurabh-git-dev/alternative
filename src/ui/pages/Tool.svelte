@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { ActionDefinition, Annotation, Box, OutputFile, PageBox, PageRef, ParamValues, SignatureValue } from '../../core/types';
+  import type { ActionDefinition, Annotation, Box, OutputFile, PageBox, PageRef, ParamValues, SignatureValue, TextItem } from '../../core/types';
   import { initialValues, validate } from '../../core/params';
   import { accepts, detectType, readFile } from '../../core/files';
   import { CancelledError, inspectAction, inspectPdf, pdfThumbnails, runAction, type JobHandle } from '../../core/runner';
@@ -19,6 +19,7 @@
   import FormEditor from '../components/FormEditor.svelte';
   import CropEditor from '../components/CropEditor.svelte';
   import AnnotateEditor from '../components/AnnotateEditor.svelte';
+  import TextEditor from '../components/TextEditor.svelte';
   import LivePreview from '../components/LivePreview.svelte';
   import { isWorkspaceParam } from '../../core/params';
   import Results from '../components/Results.svelte';
@@ -208,6 +209,8 @@
             <SignatureEditor bytes={first.data.bytes} pageCount={first.pages} value={values[key] as SignatureValue} onChange={(v) => (values[key] = v)} />
           {:else if spec.kind === 'annotations'}
             <AnnotateEditor bytes={first.data.bytes} pageCount={first.pages} annotations={values[key] as Annotation[]} onChange={(v) => (values[key] = v)} />
+          {:else if spec.kind === 'textEdits'}
+            <TextEditor bytes={first.data.bytes} pageCount={first.pages} edits={values[key] as TextItem[]} onChange={(v) => (values[key] = v)} />
           {:else if spec.kind === 'formFields'}
             <FormEditor bytes={first.data.bytes} values={values[key] as Record<string, string | boolean>} onChange={(v) => (values[key] = v)} />
           {/if}

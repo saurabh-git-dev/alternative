@@ -60,6 +60,8 @@ export const grayscalePdf: ActionDefinition = {
 | `regions` | boxes drawn on PDF pages | value is `PageBox[]` (fractions, top-left origin) |
 | `signature` | signature pad + placement on pages | value is `{ image, placements }` |
 | `formFields` | the PDF's own form fields | value is `{ [fieldName]: string \| boolean }` |
+| `annotations` | annotation tools drawn on PDF pages | value is `Annotation[]` |
+| `textEdits` | the page's own text, clickable to edit, plus new text | value is the changed lines only, `TextItem[]` |
 | `timeRange` | video player with a trim timeline | value is `{ start, end }` in seconds (`end` 0 = to the end); `initialLength`, `maxLength` |
 | `videoTime` | video player to pick a moment | value is seconds |
 | `masks` | boxes drawn over the video, each with a time span | value is `MaskBox[]`; `preview` makes the boxes show the chosen effect |

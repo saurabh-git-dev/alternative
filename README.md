@@ -11,7 +11,7 @@ WebAssembly engines and the browser's own codecs, and are never uploaded.
 | Organize PDF | Merge, Split, Organize pages (reorder/rotate/delete), Rotate |
 | Optimize PDF | Compress, Repair, Fast web view |
 | Convert PDF | PDF → JPG/PNG, Images → PDF, OCR (make scanned PDFs searchable), PDF → PDF/A (archival) |
-| Edit PDF | Annotate (text, highlight, pen, shapes, arrows, white-out, comments), Sign, Fill forms, Watermark, Page numbers, Metadata, Compare two PDFs (text and visual) |
+| Edit PDF | Edit text (change, move, restyle or delete existing text, add new text), Annotate (text, highlight, pen, shapes, arrows, white-out, comments), Sign, Fill forms, Watermark, Page numbers, Metadata, Compare two PDFs (text and visual) |
 | PDF security | Protect (AES-256), Unlock, Redact (true removal), Digitally sign (certificate, .p12/.pfx) |
 | Images | Compress, Resize, Crop, Remove background (AI), Upscale 2–4× (AI), Convert, Photo editor, Rotate, Watermark, Remove photo info, Image → text (OCR) |
 | Automate | Pipelines: chain tools and run them in one go, with ready-made recipes |

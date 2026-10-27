@@ -16,6 +16,7 @@ export const WORKSPACE_KINDS: ReadonlySet<ParamSpec['kind']> = new Set([
   'signature',
   'formFields',
   'annotations',
+  'textEdits',
   'timeRange',
   'masks',
   'videoTime',

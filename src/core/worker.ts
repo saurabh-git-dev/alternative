@@ -46,6 +46,19 @@ const api = {
     return readFormFields(bytes);
   },
 
+  /** Lines of text on one page, for Edit PDF text. */
+  async pageText(bytes: Uint8Array, page: number) {
+    const { readPageText } = await import('../engines/text-edit');
+    return readPageText(bytes, page);
+  },
+
+  /** One page rendered without its text (JPEG), shown behind edited lines. */
+  async pageWithoutText(bytes: Uint8Array, page: number, width: number): Promise<Uint8Array> {
+    const { renderWithoutText } = await import('../engines/text-edit');
+    const jpeg = await renderWithoutText(bytes, page, width);
+    return Comlink.transfer(jpeg, [jpeg.buffer as ArrayBuffer]);
+  },
+
   /** Page count and encryption status of a PDF. */
   async inspectPdf(bytes: Uint8Array) {
     const { inspectPdf } = await import('../engines/mupdf');

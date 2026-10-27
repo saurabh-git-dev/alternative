@@ -50,6 +50,28 @@ libraries directly, so swapping an engine touches one file.
   font, so every script works), and pdf-lib overlays it on the original page.
   The page itself is never re-encoded.
 
+## Editing text (`text-edit.ts`)
+- Reading: MuPDF's structured-text walker gives each character's font, size,
+  colour and box. Lines are split at wide gaps (table cells, columns); a mixed
+  line takes the style most of its letters have. Vertical and rotated text
+  isn't offered for editing.
+- Saving: each changed line is erased with a text-only redaction (images,
+  shapes and backgrounds underneath stay), shrunk a little vertically so tight
+  neighbouring lines survive. New text is appended to the page content as real
+  text (`Tm` + `TJ`), mapped through the inverse page transform so rotated or
+  offset pages work, after wrapping the old content in `q`/`Q`.
+- Fonts: the line's own font is reused (embedded as an Identity-H font) only
+  when its character map is trustworthy (the widths its glyphs report match
+  how the page drew them) and every typed letter has a glyph that draws ink;
+  subset fonts often keep a character map but empty unused glyphs. Otherwise
+  the closest standard font: Helvetica/Times/Courier by reference
+  (WinAnsi text, no embedding), MuPDF's built-in copies embedded for other
+  Latin, Greek and Cyrillic (~35–45 KB), and MuPDF's CJK fonts by reference
+  for Chinese, Japanese and Korean runs. Scripts that need shaping (Arabic,
+  Hebrew, Indic, Thai…) are refused with a clear message.
+- The editor previews changes over a render of the page with all text
+  removed, so the background behind an edited line looks as it will in the file.
+
 ## MuPDF redaction (`mupdf.ts` → `redact`)
 - Redact annotations are added for drawn boxes and text-search hits, then
   `applyRedactions` removes covered text, image pixels and line art.
