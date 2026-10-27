@@ -37,7 +37,7 @@
 {:else if !fields}
   <p class="muted">Reading form fields…</p>
 {:else if fields.length === 0}
-  <p class="muted">This PDF has no fillable fields. To add text anywhere on a page, a future “Edit PDF” tool will help.</p>
+  <p class="muted">This PDF has no fillable fields. To add or change text anywhere on a page, use <a href="#/tool/pdf.edit-text">Edit PDF text</a>.</p>
 {:else}
   <div class="form card">
     <p class="muted small">{fields.length} field{fields.length === 1 ? '' : 's'} found.</p>

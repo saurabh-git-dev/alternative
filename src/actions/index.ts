@@ -24,6 +24,7 @@ import { metadataPdf } from './pdf/metadata';
 import { ocrPdf } from './pdf/ocr';
 import { signPdf } from './pdf/sign';
 import { annotatePdf } from './pdf/annotate';
+import { editTextPdf } from './pdf/edit-text';
 import { pdfToPdfa } from './pdf/pdfa';
 import { digitalSignPdf } from './pdf/digital-sign';
 import { redactPdf } from './pdf/redact';
@@ -60,6 +61,7 @@ export const ACTIONS: ActionDefinition[] = [
   imagesToPdf,
   ocrPdf,
   signPdf,
+  editTextPdf,
   annotatePdf,
   pdfToPdfa,
   digitalSignPdf,

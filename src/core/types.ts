@@ -172,6 +172,40 @@ export interface AnnotationsParam extends ParamBase<Annotation[]> {
   kind: 'annotations';
 }
 
+/**
+ * One line of text in Edit PDF text: an existing line (with `source`) as read
+ * from the page or as changed by the user, or new text (no `source`).
+ * Positions are fractions of the displayed page.
+ */
+export interface TextItem {
+  /** Stable id for the editor: `<page>:<n>` for existing lines, anything unique for new text. */
+  id: string;
+  page: number;
+  /** Left edge of the text. */
+  x: number;
+  /** Baseline of the first line. */
+  y: number;
+  /** Empty text deletes an existing line. Newlines start more lines below. */
+  text: string;
+  /** `original` reuses the line's own font when it has every character needed. */
+  family: 'original' | 'sans' | 'serif' | 'mono';
+  bold: boolean;
+  italic: boolean;
+  /** Font size as a fraction of the page width. */
+  size: number;
+  /** `#rrggbb`. */
+  color: string;
+  /**
+   * The existing line this item replaces: the area its text covers, its font,
+   * and the standard family that looks closest to that font.
+   */
+  source?: { x: number; y: number; w: number; h: number; font: string; generic: 'sans' | 'serif' | 'mono' };
+}
+
+export interface TextEditsParam extends ParamBase<TextItem[]> {
+  kind: 'textEdits';
+}
+
 /** Part of a video, picked on a timeline under the player. `end` 0 means "to the end". */
 export interface TimeRangeParam extends ParamBase<TimeRange> {
   kind: 'timeRange';
@@ -210,6 +244,7 @@ export type ParamSpec =
   | SignatureParam
   | FormFieldsParam
   | AnnotationsParam
+  | TextEditsParam
   | FileParam
   | TimeRangeParam
   | MasksParam
@@ -225,6 +260,7 @@ export type ParamValue =
   | SignatureValue
   | Record<string, string | boolean>
   | Annotation[]
+  | TextItem[]
   | FileValue
   | TimeRange
   | MaskBox[]

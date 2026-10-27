@@ -144,6 +144,17 @@ export async function pdfThumbnails(bytes: Uint8Array, pages: number[], width = 
   return images.map((img) => URL.createObjectURL(new Blob([img as BlobPart], { type: 'image/jpeg' })));
 }
 
+/** Lines of text on a page (1-based), for Edit PDF text. */
+export function pageText(bytes: Uint8Array, page: number) {
+  return previewApi().pageText(bytes.slice(), page);
+}
+
+/** Object URL of a page rendered without its text. Callers should revoke it when done. */
+export async function pageWithoutText(bytes: Uint8Array, page: number, width = 1000): Promise<string> {
+  const jpeg = await previewApi().pageWithoutText(bytes.slice(), page, width);
+  return URL.createObjectURL(new Blob([jpeg as BlobPart], { type: 'image/jpeg' }));
+}
+
 /** Shrink an image to at most `maxBytes` in a worker of its own (cancellable). */
 export function fitImage(file: FileData, maxBytes: number, onProgress: (fraction: number) => void) {
   const { worker, api } = spawn();
