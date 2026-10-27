@@ -114,7 +114,7 @@ export async function webOffer(file: File, progress: (done: number) => void): Pr
   for (let offset = 0; offset < file.size; offset += CHUNK) {
     const bytes = new Uint8Array(await file.slice(offset, offset + CHUNK).arrayBuffer());
     const last = offset + CHUNK >= file.size;
-    await invoke('local_web_offer_chunk', bytes, { headers: { 'x-id': id, 'x-last': last ? '1' : '0' } });
+    await invoke('local_web_offer_chunk', chunkPayload(bytes, isAndroid()), { headers: { 'x-id': id, 'x-last': last ? '1' : '0' } });
     progress(offset + bytes.length);
   }
   return id;
@@ -132,6 +132,18 @@ export function sendError(code: string, name: string): string {
 
 /** Pieces a file is streamed to the native side in. */
 const CHUNK = 4 * 1024 * 1024;
+
+/**
+ * A chunk as the native side can read it. Computers take the bytes as a raw
+ * body, but Android's bridge only carries JSON (a Uint8Array would become an
+ * array of numbers several times its size), so there it goes as base64.
+ */
+export function chunkPayload(bytes: Uint8Array, android: boolean): Uint8Array | { data: string } {
+  if (!android) return bytes;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { data: btoa(binary) };
+}
 
 export interface SendProgress {
   done: number;
@@ -157,7 +169,7 @@ export async function sendFiles(fingerprint: string, files: File[], progress: (p
       for (let offset = 0; ; offset += CHUNK) {
         const bytes = new Uint8Array(await file.slice(offset, offset + CHUNK).arrayBuffer());
         const last = offset + CHUNK >= file.size;
-        await invoke('local_send_chunk', bytes, { headers: { 'x-transfer': started.transfer, 'x-file': ids[i], 'x-last': last ? '1' : '0' } });
+        await invoke('local_send_chunk', chunkPayload(bytes, isAndroid()), { headers: { 'x-transfer': started.transfer, 'x-file': ids[i], 'x-last': last ? '1' : '0' } });
         done += bytes.length;
         progress({ done, total, file: file.name });
         if (last) break;

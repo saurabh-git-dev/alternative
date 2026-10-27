@@ -3,7 +3,10 @@
 use std::sync::Arc;
 
 use serde::Deserialize;
-use tauri::{ipc::Request, AppHandle};
+use tauri::{
+    ipc::{InvokeBody, Request},
+    AppHandle,
+};
 
 use super::{discovery, files, link, pair, send, types::*, web, Local};
 
@@ -107,6 +110,22 @@ pub async fn local_send_start(app: AppHandle, args: SendArgs) -> Result<send::St
     send::start(local(&app)?, args.fingerprint, args.files, args.pin).await
 }
 
+/// The bytes of a chunk, however the webview sent them. Computers pass the
+/// raw body through, but Android's bridge only carries JSON: there the page
+/// sends `{ data: <base64> }`, and a bare `Uint8Array` arrives as an array of numbers.
+fn chunk_bytes(body: &InvokeBody) -> Result<Vec<u8>, String> {
+    use base64::Engine;
+    match body {
+        InvokeBody::Raw(bytes) => Ok(bytes.clone()),
+        InvokeBody::Json(serde_json::Value::Object(map)) => match map.get("data") {
+            Some(serde_json::Value::String(data)) => base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| format!("bad chunk: {e}")),
+            _ => Err("chunk has no data".into()),
+        },
+        InvokeBody::Json(value @ serde_json::Value::Array(_)) => serde_json::from_value(value.clone()).map_err(|e| format!("bad chunk: {e}")),
+        InvokeBody::Json(_) => Err("chunk has no data".into()),
+    }
+}
+
 /// A chunk of a file: the raw bytes as the body, `x-transfer`, `x-file` and `x-last` headers.
 #[tauri::command]
 pub async fn local_send_chunk(app: AppHandle, request: Request<'_>) -> Result<(), String> {
@@ -114,10 +133,7 @@ pub async fn local_send_chunk(app: AppHandle, request: Request<'_>) -> Result<()
     let transfer = header("x-transfer").ok_or("missing transfer")?;
     let file = header("x-file").ok_or("missing file")?;
     let last = header("x-last").as_deref() == Some("1");
-    let bytes = match request.body() {
-        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
-        _ => return Err("expected raw bytes".into()),
-    };
+    let bytes = chunk_bytes(request.body())?;
     send::chunk(local(&app)?, &transfer, &file, bytes, last).await
 }
 
@@ -204,12 +220,43 @@ pub async fn local_web_offer_chunk(app: AppHandle, request: Request<'_>) -> Resu
     let header = |name: &str| request.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_string);
     let id = header("x-id").ok_or("missing id")?;
     let last = header("x-last").as_deref() == Some("1");
-    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err("expected raw bytes".into()) };
-    web::offer_chunk(&*local(&app)?, &id, bytes, last).await
+    let bytes = chunk_bytes(request.body())?;
+    web::offer_chunk(&*local(&app)?, &id, &bytes, last).await
 }
 
 #[tauri::command]
 pub fn local_web_unoffer(app: AppHandle, id: String) -> Result<(), String> {
     web::unoffer(&*local(&app)?, &id);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn chunk_bytes_from_raw_body() {
+        assert_eq!(chunk_bytes(&InvokeBody::Raw(vec![0, 1, 255])).unwrap(), vec![0, 1, 255]);
+    }
+
+    #[test]
+    fn chunk_bytes_from_android_base64() {
+        // What the page sends on Android: `{ data: btoa(...) }`.
+        assert_eq!(chunk_bytes(&InvokeBody::Json(json!({ "data": "AAH/" }))).unwrap(), vec![0, 1, 255]);
+    }
+
+    #[test]
+    fn chunk_bytes_from_number_array() {
+        // A bare Uint8Array through Android's JSON bridge.
+        assert_eq!(chunk_bytes(&InvokeBody::Json(json!([0, 1, 255]))).unwrap(), vec![0, 1, 255]);
+    }
+
+    #[test]
+    fn chunk_bytes_rejects_other_shapes() {
+        assert!(chunk_bytes(&InvokeBody::Json(json!({}))).is_err());
+        assert!(chunk_bytes(&InvokeBody::Json(json!({ "data": "not base64!" }))).is_err());
+        assert!(chunk_bytes(&InvokeBody::Json(json!([0, 256]))).is_err());
+        assert!(chunk_bytes(&InvokeBody::Json(json!("x"))).is_err());
+    }
 }
