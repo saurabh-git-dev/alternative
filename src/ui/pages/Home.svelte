@@ -1,17 +1,19 @@
 <!--
-  Home: a dashboard of the tools most people need, one search away from all
-  of them.
+  Two pages share this component:
 
-  By default it shows an everyday set (see PRESETS): the common PDF, image and
-  video tools plus a few handy extras. "Customize" at the bottom opens a dialog
-  to pick the tools shown, starting from a preset for a kind of user
-  (everyday, documents, photos & video, developer); the choice is saved in
-  this browser (settings.ts). "Show all tools" lists everything.
+  - The PDF & image home (`#/` in the root section): every PDF and image tool
+    plus sharing and automation, as slim rows in panels.
+  - The Dashboard (`#/dashboard`, `dashboard`): the tools most people need,
+    from every section. By default an everyday set (see PRESETS): common PDF,
+    image and video tools plus a few handy extras. "Customize" at the bottom
+    opens a dialog to pick the tools shown, starting from a preset for a kind
+    of user (everyday, documents, photos & video, developer); the choice is
+    saved in this browser (settings.ts). "Show all tools" lists everything.
 
-  The search box stays pinned at the top and searches every tool in every
-  section (PDF, image, video, IT), shown on the dashboard or not: typing
-  filters the panels, Enter opens the first match, and a match opens the tool
-  itself, not its section's home page. "/" jumps to the box from anywhere.
+  On both, the search box stays pinned at the top and searches every tool in
+  every section (PDF, image, video, IT): typing filters the panels, Enter
+  opens the best match, and a match opens the tool itself, not its section's
+  home page. "/" jumps to the box from anywhere.
 
   Dropping files anywhere on the page (or picking them with "Open a file")
   filters the list to tools that accept them; picking a tool then opens it with
@@ -28,7 +30,7 @@
   import { IT_HOME, RECORD_HOME, VIDEO_HOME, itToolHref, videoToolHref } from '../section';
   import DashboardDialog, { type DashboardPreset } from '../components/DashboardDialog.svelte';
 
-  let { onOpen }: { onOpen: (id: string, files?: File[]) => void } = $props();
+  let { onOpen, dashboard = false }: { onOpen: (id: string, files?: File[]) => void; dashboard?: boolean } = $props();
 
   type PanelId = 'pdf' | 'image' | 'video' | 'it' | 'more';
 
@@ -48,6 +50,8 @@
     open: () => void;
     href?: string;
     demanding?: string;
+    /** A shortcut listed on the PDF & image home only: search and the dashboard have the real thing. */
+    listOnly?: boolean;
   }
 
   let query = $state('');
@@ -143,6 +147,28 @@
       open: () => (location.hash = '#/connect'),
     },
     {
+      key: 'qr-scan',
+      icon: '📷',
+      title: 'Scan a QR code',
+      description: 'Read any QR code with the camera or from a photo: links, Wi-Fi, contacts and more.',
+      panel: 'more',
+      href: itToolHref('qr-scan'),
+      takes: () => false,
+      open: () => (location.href = itToolHref('qr-scan')),
+      listOnly: true,
+    },
+    {
+      key: 'video',
+      icon: '🎬',
+      title: 'Video tools',
+      description: 'Trim, crop, blur areas, compress, convert, GIFs and more.',
+      panel: 'more',
+      href: VIDEO_HOME,
+      takes: () => false,
+      open: () => (location.href = VIDEO_HOME),
+      listOnly: true,
+    },
+    {
       key: 'record',
       icon: '⏺️',
       title: 'Screen recorder',
@@ -152,6 +178,17 @@
       href: RECORD_HOME,
       takes: (files) => files.length === 0,
       open: () => (location.href = RECORD_HOME),
+    },
+    {
+      key: 'it',
+      icon: '🛠️',
+      title: 'IT tools',
+      description: 'JSON, Base64, hashes, UUIDs, JWT, regex, cron, colors and 25 more.',
+      panel: 'more',
+      href: IT_HOME,
+      takes: () => false,
+      open: () => (location.href = IT_HOME),
+      listOnly: true,
     },
     {
       key: 'pipeline',
@@ -191,7 +228,7 @@
    * Starting sets for the dashboard, one per kind of user. The first is the
    * default: what most people reach for. Saved pipelines join every preset.
    */
-  const keysOf = (panel: PanelId) => entries.filter((e) => e.panel === panel).map((e) => e.key);
+  const keysOf = (panel: PanelId) => tools.filter((e) => e.panel === panel).map((e) => e.key);
   const saved = pipelines.map((p) => `pipeline:${p.name}`);
   const PRESETS: DashboardPreset[] = $derived([
     {
@@ -236,9 +273,11 @@
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   /** Searching or filtering by files looks at every tool, on the dashboard or not. */
   const filtering = $derived(words.length > 0 || dropped.length > 0);
+  /** Everything but the PDF & image home's shortcuts. */
+  const tools = $derived(entries.filter((e) => !e.listOnly));
   const visible = $derived(
-    entries.filter((e) => {
-      if (!filtering) return showAll || shownKeys.has(e.key);
+    (dashboard || filtering ? tools : entries).filter((e) => {
+      if (!filtering) return dashboard ? showAll || shownKeys.has(e.key) : ['pdf', 'image', 'more'].includes(e.panel);
       const text = `${e.title} ${e.description} ${e.keywords ?? ''} ${e.group ?? ''} ${e.panel}`.toLowerCase();
       return words.every((w) => text.includes(w)) && (dropped.length === 0 || e.takes(dropped));
     }),
@@ -357,8 +396,13 @@
 {/snippet}
 
 <section class="hero">
-  <h1>Everyday tools, right in your browser</h1>
-  <p class="muted">PDF, image, video and more. Free and private: files are processed on your device and never uploaded.</p>
+  {#if dashboard}
+    <h1>Your everyday tools</h1>
+    <p class="muted">The tools you use most, from every section. Customize them at the bottom; search finds any tool.</p>
+  {:else}
+    <h1>Every PDF and image tool, right in your browser</h1>
+    <p class="muted">Free and private: files are processed on your device and never uploaded.</p>
+  {/if}
 </section>
 
 <div class="bar">
@@ -411,18 +455,18 @@
   {/if}
 {/if}
 
-{#if !filtering}
+{#if dashboard && !filtering}
   <div class="customize">
     <button class="btn" onclick={() => (customizing = true)}>⚙️ Customize dashboard</button>
     <button class="btn" onclick={() => (showAll = !showAll)} aria-pressed={showAll}>
-      {showAll ? '⭐ Show my dashboard' : `🧰 Show all ${entries.length} tools`}
+      {showAll ? '⭐ Show my dashboard' : `🧰 Show all ${tools.length} tools`}
     </button>
   </div>
 {/if}
 
 {#if customizing}
   <DashboardDialog
-    panels={PANELS.map((p) => ({ id: p.id, icon: p.icon, label: p.label, tools: entries.filter((e) => e.panel === p.id) }))}
+    panels={PANELS.map((p) => ({ id: p.id, icon: p.icon, label: p.label, tools: tools.filter((e) => e.panel === p.id) }))}
     selected={[...shownKeys]}
     presets={PRESETS}
     onSave={saveChoice}

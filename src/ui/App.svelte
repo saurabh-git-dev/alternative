@@ -1,6 +1,7 @@
 <!--
   App shell: header and a tiny hash router.
-  Routes: `#/` (home), `#/tool/<action id>`, `#/share`, share links
+  Routes: `#/` (home), `#/dashboard` (your pick of tools from every
+  section, see pages/Home.svelte), `#/tool/<action id>`, `#/share`, share links
   `#/s/<data>` / `#/q/<data>` (see core/share.ts), connected devices
   `#/connect[/…]` and `#/d/<invite>` (see connect/ConnectPage.svelte; the
   old `#/direct`, `#/direct/receive` and `#/scan` open it too), `#/pipeline[/<data>]`
@@ -51,7 +52,7 @@
   import VideoHome from './video/VideoHome.svelte';
   import RecordHome from './record/RecordHome.svelte';
   import { getItTool } from '../it/registry';
-  import { CHAT_HOME, FILES_HOME, IT_HOME, RECORD_HOME, VIDEO_HOME, section, type Section } from './section';
+  import { CHAT_HOME, FILES_HOME, IT_HOME, RECORD_HOME, VIDEO_HOME, section, sectionHref, type Section } from './section';
   import { PIPELINE_ROUTE } from '../core/pipeline';
   import { LINK_ROUTE, QR_ROUTE } from '../core/share';
   import { DIRECT_ROUTE } from '../core/direct';
@@ -109,7 +110,9 @@
       ? 'it-tool'
       : hash === PIPELINE_ROUTE || hash.startsWith(`${PIPELINE_ROUTE}/`)
         ? 'pipeline'
-        : hash === '#/compare'
+        : hash === '#/dashboard'
+          ? 'dashboard'
+          : hash === '#/compare'
           ? 'compare'
           : hash === '#/share'
           ? 'share'
@@ -139,6 +142,8 @@
       ? HOME_TITLES[section]
       : page === 'pipeline'
         ? 'Pipeline · Tools'
+        : page === 'dashboard'
+        ? 'Dashboard · Tools'
         : page === 'compare'
         ? 'Compare PDFs · Tools'
         : page === 'share'
@@ -152,6 +157,8 @@
         : 'Shared file · Tools';
   });
 
+  /** Not a section of its own: a page that works in any, linked from the root one. */
+  const DASHBOARD = { id: 'dashboard' as const, href: sectionHref('files', '#/dashboard'), icon: '⭐', label: 'Dashboard', short: 'Mine' };
   const SECTIONS: { id: Section; href: string; icon: string; label: string; short: string }[] = [
     { id: 'files', href: FILES_HOME, icon: '📄', label: 'PDF & Image', short: 'Files' },
     { id: 'video', href: VIDEO_HOME, icon: '🎬', label: 'Video', short: 'Video' },
@@ -160,7 +167,9 @@
   ];
   const CHAT = { id: 'chat' as const, href: CHAT_HOME, icon: '💬', label: 'Chat', short: 'Chat' };
   /** Chat joins the menu only in a browser that switched it on. */
-  const shownSections = $derived(chatLink.shown ? [...SECTIONS, CHAT] : SECTIONS);
+  const shownSections = $derived([DASHBOARD, ...SECTIONS, ...(chatLink.shown ? [CHAT] : [])]);
+  /** The highlighted tab: the dashboard while it's open, else the section. */
+  const activeTab = $derived(page === 'dashboard' ? 'dashboard' : section);
 
   const connected = $derived(connectedCount());
   const nearbyOnline = $derived(localHub.devices.filter((d) => d.linked).length);
@@ -184,7 +193,7 @@
   </a>
   <nav class="sections" aria-label="Sections">
     {#each shownSections as s (s.id)}
-      <a href={s.href} class:active={section === s.id} aria-current={section === s.id ? 'page' : undefined} title={s.label}>
+      <a href={s.href} class:active={activeTab === s.id} aria-current={activeTab === s.id ? 'page' : undefined} title={s.label}>
         <span aria-hidden="true">{s.icon}</span> <span class="long">{s.label}</span><span class="short">{s.short}</span>
       </a>
     {/each}
@@ -241,6 +250,8 @@
     {#key hash}
       <PipelinePage encoded={hash.slice(PIPELINE_ROUTE.length + 1)} />
     {/key}
+  {:else if page === 'dashboard'}
+    <Home onOpen={openTool} dashboard />
   {:else if page === 'compare'}
     <Compare />
   {:else if page === 'share'}
