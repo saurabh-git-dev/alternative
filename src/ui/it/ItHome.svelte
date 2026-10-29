@@ -8,6 +8,7 @@
   import { IT_CATEGORIES, IT_TOOLS } from '../../it/registry';
   import { FILES_HOME } from '../section';
   import ToolCatalog, { type CatalogEntry } from '../components/ToolCatalog.svelte';
+  import { otherSectionTools } from '../other-tools';
 
   const SHARE: CatalogEntry[] = [
     { key: 'share', icon: '🔗', title: 'Share text as QR code', description: 'Put text, JSON or a small file into a QR code and link.', keywords: 'send phone qr', group: 'share', href: '#/share' },
@@ -26,7 +27,7 @@
   <p class="muted">Encoders, converters, generators and more. Everything runs on your device; nothing is sent anywhere.</p>
 </section>
 
-<ToolCatalog {entries} groups={GROUPS} placeholder="Search tools, e.g. “json” or “uuid”" label="Search IT tools">
+<ToolCatalog {entries} groups={GROUPS} others={otherSectionTools()} placeholder="Search tools, e.g. “json” or “uuid”" label="Search IT tools">
   {#snippet empty()}look in the <a href={FILES_HOME}>PDF & image tools</a>{/snippet}
 </ToolCatalog>
 

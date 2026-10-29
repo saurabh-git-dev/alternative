@@ -5,6 +5,10 @@
 
   Entries are links; `open` (when set) runs instead, e.g. to hand files to
   the tool. The `extra` snippet adds controls next to the search box.
+
+  `others` are tools from other sections (see other-tools.ts): they aren't
+  listed, but a search finds them too, in a panel of their own, and opens
+  the tool itself.
 -->
 <script lang="ts" module>
   export interface CatalogEntry {
@@ -37,19 +41,25 @@
     label,
     empty,
     extra,
-  }: { entries: CatalogEntry[]; groups: CatalogGroup[]; placeholder: string; label: string; empty?: Snippet; extra?: Snippet } = $props();
+    others = [],
+  }: { entries: CatalogEntry[]; groups: CatalogGroup[]; placeholder: string; label: string; empty?: Snippet; extra?: Snippet; others?: CatalogEntry[] } = $props();
+
+  const OTHER: CatalogGroup = { id: 'other', label: 'In other sections', icon: '🔎' };
 
   let query = $state('');
   let search: HTMLInputElement;
 
   /** Every word typed must appear somewhere in the entry. */
-  const visible = $derived.by(() => {
-    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return entries.filter((e) => {
+  function matching(list: CatalogEntry[], q: string): CatalogEntry[] {
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return list.filter((e) => {
       const text = `${e.title} ${e.description} ${e.keywords ?? ''} ${e.group}`.toLowerCase();
       return words.every((w) => text.includes(w));
     });
-  });
+  }
+  const visible = $derived(matching(entries, query));
+  /** Other sections' tools appear only for a search. */
+  const elsewhere = $derived(query.trim() ? matching(others, query) : []);
 
   function go(e: CatalogEntry) {
     if (e.open) e.open();
@@ -57,7 +67,8 @@
   }
 
   function onSearchKey(e: KeyboardEvent) {
-    if (e.key === 'Enter' && visible[0]) go(visible[0]);
+    const first = visible[0] ?? elsewhere[0];
+    if (e.key === 'Enter' && first) go(first);
     if (e.key === 'Escape') query = '';
   }
 
@@ -80,8 +91,8 @@
 </div>
 
 <div class="panels">
-  {#each groups as group (group.id)}
-    {@const items = visible.filter((e) => e.group === group.id)}
+  {#each [...groups, OTHER] as group (group.id)}
+    {@const items = group === OTHER ? elsewhere : visible.filter((e) => e.group === group.id)}
     {#if items.length}
       <section class="panel card">
         <h2><span aria-hidden="true">{group.icon}</span> {group.label}</h2>
@@ -110,7 +121,7 @@
   {/each}
 </div>
 
-{#if visible.length === 0}
+{#if visible.length === 0 && elsewhere.length === 0}
   <p class="empty muted">No tools match. Try another word{#if empty}, or {@render empty()}{/if}.</p>
 {/if}
 

@@ -1,26 +1,36 @@
 <!--
-  Home: every tool on one compact screen.
+  Home: a dashboard of the tools most people need, one search away from all
+  of them.
 
-  Tools are listed as slim rows in two panels, PDF and Image (side by side on
-  wide screens), so most of the catalogue fits without scrolling. The search
-  box stays pinned at the top: typing filters every panel, Enter opens the
-  first match, and "/" jumps to the box from anywhere on the page.
+  By default it shows an everyday set (see PRESETS): the common PDF, image and
+  video tools plus a few handy extras. "Customize" at the bottom opens a dialog
+  to pick the tools shown, starting from a preset for a kind of user
+  (everyday, documents, photos & video, developer); the choice is saved in
+  this browser (settings.ts). "Show all tools" lists everything.
+
+  The search box stays pinned at the top and searches every tool in every
+  section (PDF, image, video, IT), shown on the dashboard or not: typing
+  filters the panels, Enter opens the first match, and a match opens the tool
+  itself, not its section's home page. "/" jumps to the box from anywhere.
 
   Dropping files anywhere on the page (or picking them with "Open a file")
   filters the list to tools that accept them; picking a tool then opens it with
   those files already loaded.
 -->
 <script lang="ts">
-  import { ACTIONS, CATEGORIES } from '../../actions';
-  import type { ActionCategory } from '../../core/types';
+  import { ACTIONS, CATEGORIES, VIDEO_ACTIONS, VIDEO_CATEGORIES } from '../../actions';
+  import { IT_CATEGORIES, IT_TOOLS } from '../../it/registry';
   import { accepts, detectType, readFile } from '../../core/files';
   import { isConstrained } from '../../core/device';
   import { handoff } from '../handoff.svelte';
   import { PIPELINE_ROUTE, encodePipeline } from '../../core/pipeline';
-  import { loadPipelines } from '../settings';
-  import { RECORD_HOME, VIDEO_HOME, itToolHref } from '../section';
+  import { loadDashboard, loadPipelines, saveDashboard } from '../settings';
+  import { IT_HOME, RECORD_HOME, VIDEO_HOME, itToolHref, videoToolHref } from '../section';
+  import DashboardDialog, { type DashboardPreset } from '../components/DashboardDialog.svelte';
 
   let { onOpen }: { onOpen: (id: string, files?: File[]) => void } = $props();
+
+  type PanelId = 'pdf' | 'image' | 'video' | 'it' | 'more';
 
   /** One row in the list: a tool (action), a page of its own, or a shortcut. */
   interface Entry {
@@ -30,8 +40,9 @@
     description: string;
     /** Extra words that should match a search but aren't shown. */
     keywords?: string;
-    /** Category id (PDF sub-groups, 'image') or 'more'. */
-    group: ActionCategory | 'more';
+    panel: PanelId;
+    /** Sub-heading within the panel (a category id), if it has them. */
+    group?: string;
     /** Hidden while files are dropped unless this returns true. */
     takes: (files: File[]) => boolean;
     open: () => void;
@@ -46,14 +57,18 @@
   let picker: HTMLInputElement;
 
   const constrained = isConstrained();
+  const pipelines = loadPipelines();
 
-  const entries: Entry[] = [
+  const isVideo = (f: File) => detectType(f).startsWith('video/');
+
+  const entries: Entry[] = $derived([
     ...ACTIONS.map(
       (a): Entry => ({
         key: a.id,
         icon: a.icon,
         title: a.title,
         description: a.description,
+        panel: a.category === 'image' ? 'image' : 'pdf',
         group: a.category,
         takes: (files) => files.every((f) => accepts(a, detectType(f))),
         open: () => onOpen(a.id, dropped),
@@ -67,18 +82,49 @@
       title: 'Compare PDFs',
       description: 'See what changed between two versions, word by word and on the page.',
       keywords: 'diff difference',
+      panel: 'pdf',
       group: 'pdf-edit',
       href: '#/compare',
       takes: (files) => files.every((f) => detectType(f) === 'application/pdf'),
       open: () => (location.hash = '#/compare'),
     },
+    // Video tools live in the Video section; with videos picked here they open in place, loaded.
+    ...VIDEO_ACTIONS.map(
+      (a): Entry => ({
+        key: a.id,
+        icon: a.icon,
+        title: a.title,
+        description: a.description,
+        keywords: 'video',
+        panel: 'video',
+        group: a.category,
+        href: dropped.length ? undefined : videoToolHref(a.id),
+        takes: (files) => files.every(isVideo),
+        open: () => (dropped.length ? onOpen(a.id, dropped) : (location.href = videoToolHref(a.id))),
+        demanding: a.demanding,
+      }),
+    ),
+    ...IT_TOOLS.map(
+      (t): Entry => ({
+        key: `it:${t.id}`,
+        icon: t.icon,
+        title: t.title,
+        description: t.description,
+        keywords: `${t.keywords ?? ''} developer it`,
+        panel: 'it',
+        group: t.category,
+        href: itToolHref(t.id),
+        takes: (files) => files.length === 0,
+        open: () => (location.href = itToolHref(t.id)),
+      }),
+    ),
     {
       key: 'share',
       icon: '🔗',
       title: 'Share as link or QR',
       description: 'Put a file or text into a link and QR code, then open it on your phone.',
       keywords: 'send phone transfer qr code',
-      group: 'more',
+      panel: 'more',
       takes: (files) => files.length <= 1,
       open: async () => {
         handoff.file = dropped[0] ? await readFile(dropped[0]) : null;
@@ -91,32 +137,10 @@
       title: 'Connect a device',
       description: 'Send files and text to your phone or another computer, any size, either way. End-to-end encrypted.',
       keywords: 'share transfer send receive big large file phone computer airdrop scan qr camera chat',
-      group: 'more',
+      panel: 'more',
       href: '#/connect',
       takes: (files) => files.length === 0,
       open: () => (location.hash = '#/connect'),
-    },
-    {
-      key: 'qr-scan',
-      icon: '📷',
-      title: 'Scan a QR code',
-      description: 'Read any QR code with the camera or from a photo: links, Wi-Fi, contacts and more.',
-      keywords: 'qr code scanner reader barcode camera wifi contact vcard link',
-      group: 'more',
-      href: itToolHref('qr-scan'),
-      takes: (files) => files.length === 0,
-      open: () => (location.href = itToolHref('qr-scan')),
-    },
-    {
-      key: 'video',
-      icon: '🎬',
-      title: 'Video tools',
-      description: 'Trim, crop, blur areas, compress, convert, GIFs and more.',
-      keywords: 'video mp4 movie clip compress trim cut crop blur gif audio mp3',
-      group: 'more',
-      href: VIDEO_HOME,
-      takes: (files) => files.length === 0 || files.every((f) => detectType(f).startsWith('video/')),
-      open: () => (location.href = VIDEO_HOME),
     },
     {
       key: 'record',
@@ -124,21 +148,10 @@
       title: 'Screen recorder',
       description: 'Record your screen, camera and mic. Saved in this browser.',
       keywords: 'loom screencast capture webcam',
-      group: 'more',
+      panel: 'more',
       href: RECORD_HOME,
       takes: (files) => files.length === 0,
       open: () => (location.href = RECORD_HOME),
-    },
-    {
-      key: 'it',
-      icon: '🛠️',
-      title: 'IT tools',
-      description: 'JSON, Base64, hashes, UUIDs, JWT, regex, cron, colors and 25 more.',
-      keywords: 'developer dev json base64 hash uuid password jwt regex encode decode convert',
-      group: 'more',
-      href: 'it/',
-      takes: (files) => files.length === 0,
-      open: () => (location.href = 'it/'),
     },
     {
       key: 'pipeline',
@@ -146,51 +159,118 @@
       title: 'Build a pipeline',
       description: 'Chain tools and run them in one go, e.g. photos → PDF → OCR → compress.',
       keywords: 'automate chain batch recipe workflow',
-      group: 'more',
+      panel: 'more',
       href: PIPELINE_ROUTE,
       takes: (files) => files.length === 0,
       open: () => (location.hash = PIPELINE_ROUTE),
     },
-    ...loadPipelines().map(
+    ...pipelines.map(
       (p): Entry => ({
         key: `pipeline:${p.name}`,
         icon: '▶️',
         title: p.name,
         description: `${p.steps.length} steps · your pipeline`,
         keywords: 'pipeline automate',
-        group: 'more',
+        panel: 'more',
         href: `${PIPELINE_ROUTE}/${encodePipeline(p)}`,
         takes: (files) => files.length === 0,
         open: () => (location.hash = `${PIPELINE_ROUTE}/${encodePipeline(p)}`),
       }),
     ),
+  ]);
+
+  const PANELS: { id: PanelId; icon: string; label: string; href?: string; more?: string; groups?: { id: string; label: string }[] }[] = [
+    { id: 'pdf', icon: '📄', label: 'PDF', groups: CATEGORIES.filter((c) => c.id.startsWith('pdf-')).map((c) => ({ id: c.id, label: c.label.replace(/ ?PDF ?/, '') })) },
+    { id: 'image', icon: '🖼️', label: 'Image' },
+    { id: 'more', icon: '✨', label: 'Share & automate' },
+    { id: 'video', icon: '🎬', label: 'Video', href: VIDEO_HOME, more: 'All video tools', groups: VIDEO_CATEGORIES },
+    { id: 'it', icon: '🛠️', label: 'IT tools', href: IT_HOME, more: 'All IT tools', groups: IT_CATEGORIES },
   ];
 
-  /** Every word typed must appear somewhere in the entry, so "pdf comp" finds Compress PDF. */
-  const visible = $derived.by(() => {
-    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return entries.filter((e) => {
-      const text = `${e.title} ${e.description} ${e.keywords ?? ''} ${e.group}`.toLowerCase();
-      return words.every((w) => text.includes(w)) && (dropped.length === 0 || e.takes(dropped));
-    });
-  });
+  /**
+   * Starting sets for the dashboard, one per kind of user. The first is the
+   * default: what most people reach for. Saved pipelines join every preset.
+   */
+  const keysOf = (panel: PanelId) => entries.filter((e) => e.panel === panel).map((e) => e.key);
+  const saved = pipelines.map((p) => `pipeline:${p.name}`);
+  const PRESETS: DashboardPreset[] = $derived([
+    {
+      id: 'everyday',
+      icon: '⭐',
+      label: 'Everyday',
+      keys: [
+        'pdf.merge', 'pdf.split', 'pdf.compress', 'pdf.to-images', 'pdf.from-images', 'pdf.sign', 'pdf.edit-text', 'pdf.fill-form', 'pdf.protect', 'pdf.unlock',
+        'image.compress', 'image.resize', 'image.crop', 'image.convert', 'image.remove-background',
+        'video.trim', 'video.compress', 'video.audio',
+        'it:qr', 'it:qr-scan', 'it:password',
+        'share', 'connect', 'record', ...saved,
+      ],
+    },
+    {
+      id: 'documents',
+      icon: '🗂️',
+      label: 'Documents & office',
+      keys: [...keysOf('pdf'), 'image.ocr', 'image.convert', 'image.compress', 'it:qr-scan', 'share', 'connect', 'pipeline', ...saved],
+    },
+    {
+      id: 'media',
+      icon: '📸',
+      label: 'Photos & video',
+      keys: ['pdf.from-images', 'pdf.to-images', ...keysOf('image'), ...keysOf('video'), 'share', 'connect', 'record', ...saved],
+    },
+    {
+      id: 'developer',
+      icon: '👩‍💻',
+      label: 'Developer',
+      keys: [...keysOf('it'), 'pdf.merge', 'pdf.compress', 'image.compress', 'image.convert', 'share', 'connect', 'pipeline', ...saved],
+    },
+  ]);
 
-  const PDF_GROUPS = CATEGORIES.filter((c) => c.id.startsWith('pdf-'));
-  const inGroup = (id: string) => visible.filter((e) => e.group === id);
-  const pdfCount = $derived(visible.filter((e) => e.group.startsWith('pdf-')).length);
-  const imageEntries = $derived(inGroup('image'));
-  const moreEntries = $derived(inGroup('more'));
+  let chosen = $state<string[] | null>(loadDashboard());
+  /** The tools on the dashboard: the saved choice, or the default preset. */
+  const shownKeys = $derived(new Set(chosen ?? PRESETS[0].keys));
+  let showAll = $state(false);
+  let customizing = $state(false);
+
+  /** Every word typed must appear somewhere in the entry, so "pdf comp" finds Compress PDF. */
+  const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
+  /** Searching or filtering by files looks at every tool, on the dashboard or not. */
+  const filtering = $derived(words.length > 0 || dropped.length > 0);
+  const visible = $derived(
+    entries.filter((e) => {
+      if (!filtering) return showAll || shownKeys.has(e.key);
+      const text = `${e.title} ${e.description} ${e.keywords ?? ''} ${e.group ?? ''} ${e.panel}`.toLowerCase();
+      return words.every((w) => text.includes(w)) && (dropped.length === 0 || e.takes(dropped));
+    }),
+  );
+  const inTitle = (e: Entry) => words.every((w) => e.title.toLowerCase().includes(w));
+  /** Search results run best first: titles that match every word, then the rest. */
+  const ranked = $derived(
+    words.length ? [...visible].sort((a, b) => +!inTitle(a) - +!inTitle(b)) : visible,
+  );
+  const inPanel = (id: PanelId) => visible.filter((e) => e.panel === id);
+  const inGroup = (id: PanelId, group: string) => visible.filter((e) => e.panel === id && e.group === group);
+  /** Panels with sub-headings show them once they hold more than a handful of tools. */
+  const SUBHEADS_FROM = 7;
 
   function onSearchKey(e: KeyboardEvent) {
-    if (e.key === 'Enter' && visible[0]) visible[0].open();
+    if (e.key === 'Enter' && ranked[0]) ranked[0].open();
     if (e.key === 'Escape') query = '';
+  }
+
+  function saveChoice(keys: string[]) {
+    const isDefault = keys.length === PRESETS[0].keys.length && PRESETS[0].keys.every((k) => keys.includes(k));
+    chosen = isDefault ? null : keys;
+    saveDashboard(chosen);
+    showAll = false;
+    customizing = false;
   }
 
   // Page-wide shortcuts and drop target, active while the home page is shown.
   $effect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]');
-      if (e.key === '/' && !typing) {
+      if (e.key === '/' && !typing && !customizing) {
         e.preventDefault();
         search.focus();
       }
@@ -227,9 +307,12 @@
 {#snippet row(e: Entry)}
   {@const warn = constrained && e.demanding}
   {#if e.href}
-    <a class="tool" href={e.href} title={e.description}>
+    <a class="tool" href={e.href} title={warn ? `${e.description}\n\n⚠ ${e.demanding}` : e.description}>
       <span class="icon" aria-hidden="true">{e.icon}</span>
-      <span class="text"><span class="title">{e.title}</span><span class="desc">{e.description}</span></span>
+      <span class="text">
+        <span class="title">{e.title}{#if warn}<span class="heavy" aria-label="May be slow on this device">⚠</span>{/if}</span>
+        <span class="desc">{e.description}</span>
+      </span>
     </a>
   {:else}
     <button class="tool" onclick={e.open} title={warn ? `${e.description}\n\n⚠ ${e.demanding}` : e.description}>
@@ -242,9 +325,40 @@
   {/if}
 {/snippet}
 
+{#snippet panel(id: PanelId)}
+  {@const p = PANELS.find((x) => x.id === id)!}
+  {@const items = inPanel(id)}
+  {#if items.length}
+    {@const subheads = p.groups && items.length >= SUBHEADS_FROM}
+    <section class="panel card" class:wide={subheads}>
+      <h2>
+        <span><span aria-hidden="true">{p.icon}</span> {p.label}</span>
+        {#if p.href && !filtering}<a class="all" href={p.href}>{p.more} →</a>{/if}
+      </h2>
+      {#if subheads}
+        <div class="groups">
+          {#each p.groups! as g (g.id)}
+            {@const sub = inGroup(id, g.id)}
+            {#if sub.length}
+              <div class="group">
+                <h3>{g.label}</h3>
+                {#each sub as e (e.key)}{@render row(e)}{/each}
+              </div>
+            {/if}
+          {/each}
+        </div>
+      {:else}
+        <div class="group">
+          {#each items as e (e.key)}{@render row(e)}{/each}
+        </div>
+      {/if}
+    </section>
+  {/if}
+{/snippet}
+
 <section class="hero">
-  <h1>Every PDF and image tool, right in your browser</h1>
-  <p class="muted">Free and private: files are processed on your device and never uploaded.</p>
+  <h1>Everyday tools, right in your browser</h1>
+  <p class="muted">PDF, image, video and more. Free and private: files are processed on your device and never uploaded.</p>
 </section>
 
 <div class="bar">
@@ -252,12 +366,12 @@
     bind:this={search}
     class="search"
     type="search"
-    placeholder="Search tools, e.g. “compress”"
-    aria-label="Search tools"
+    placeholder="Search all tools, e.g. “compress” or “json”"
+    aria-label="Search all tools"
     bind:value={query}
     onkeydown={onSearchKey}
   />
-  <input bind:this={picker} type="file" multiple accept="application/pdf,image/*" hidden onchange={(e) => (dropped = [...(e.currentTarget.files ?? [])])} />
+  <input bind:this={picker} type="file" multiple accept="application/pdf,image/*,video/*" hidden onchange={(e) => (dropped = [...(e.currentTarget.files ?? [])])} />
   {#if dropped.length}
     <span class="chip" title={dropped.map((f) => f.name).join('\n')}>
       📎 {dropped.length === 1 ? dropped[0].name : `${dropped.length} files`}
@@ -272,47 +386,48 @@
 {/if}
 
 <div class="panels">
-  {#if pdfCount}
-    <section class="panel card pdf">
-      <h2><span aria-hidden="true">📄</span> PDF</h2>
-      <div class="groups">
-        {#each PDF_GROUPS as category (category.id)}
-          {@const items = inGroup(category.id)}
-          {#if items.length}
-            <div class="group">
-              <h3>{category.label.replace(/ ?PDF ?/, '')}</h3>
-              {#each items as e (e.key)}{@render row(e)}{/each}
-            </div>
-          {/if}
-        {/each}
-      </div>
-    </section>
+  {#if inPanel('pdf').length}
+    {@render panel('pdf')}
   {/if}
-
-  {#if imageEntries.length || moreEntries.length}
+  {#if inPanel('image').length || inPanel('more').length}
     <div class="side">
-      {#if imageEntries.length}
-        <section class="panel card">
-          <h2><span aria-hidden="true">🖼️</span> Image</h2>
-          <div class="group">
-            {#each imageEntries as e (e.key)}{@render row(e)}{/each}
-          </div>
-        </section>
-      {/if}
-      {#if moreEntries.length}
-        <section class="panel card">
-          <h2><span aria-hidden="true">✨</span> Share & automate</h2>
-          <div class="group">
-            {#each moreEntries as e (e.key)}{@render row(e)}{/each}
-          </div>
-        </section>
-      {/if}
+      {@render panel('image')}
+      {@render panel('more')}
     </div>
   {/if}
 </div>
+{#if inPanel('video').length || inPanel('it').length}
+  <div class="panels pair">
+    {@render panel('video')}
+    {@render panel('it')}
+  </div>
+{/if}
 
 {#if visible.length === 0}
-  <p class="empty muted">No tools match. Try another word{dropped.length ? ', or clear the file' : ''}.</p>
+  {#if filtering}
+    <p class="empty muted">No tools match. Try another word{dropped.length ? ', or clear the file' : ''}.</p>
+  {:else}
+    <p class="empty muted">Your dashboard is empty. Customize it below, or search for any tool.</p>
+  {/if}
+{/if}
+
+{#if !filtering}
+  <div class="customize">
+    <button class="btn" onclick={() => (customizing = true)}>⚙️ Customize dashboard</button>
+    <button class="btn" onclick={() => (showAll = !showAll)} aria-pressed={showAll}>
+      {showAll ? '⭐ Show my dashboard' : `🧰 Show all ${entries.length} tools`}
+    </button>
+  </div>
+{/if}
+
+{#if customizing}
+  <DashboardDialog
+    panels={PANELS.map((p) => ({ id: p.id, icon: p.icon, label: p.label, tools: entries.filter((e) => e.panel === p.id) }))}
+    selected={[...shownKeys]}
+    presets={PRESETS}
+    onSave={saveChoice}
+    onClose={() => (customizing = false)}
+  />
 {/if}
 
 {#if dragging}
@@ -408,13 +523,42 @@
   .panel {
     padding: 12px 10px 10px;
   }
+  .pair {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    margin-top: 16px;
+  }
   h2 {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
     font-size: 15px;
     margin: 0 6px 6px;
     letter-spacing: -0.01em;
   }
+  .all {
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .all:hover {
+    text-decoration: underline;
+  }
+  .customize {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 24px;
+  }
+  .customize .btn {
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 14px;
+  }
   .groups {
-    columns: 2;
+    columns: 2 220px;
     column-gap: 10px;
   }
   .group {
@@ -506,7 +650,8 @@
   }
 
   @media (max-width: 900px) {
-    .panels {
+    .panels,
+    .pair {
       grid-template-columns: 1fr;
     }
   }
