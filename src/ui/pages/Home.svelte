@@ -1,19 +1,19 @@
 <!--
-  Two pages share this component:
+  Three pages share this component (`view`):
 
-  - The PDF & image home (`#/` in the root section): every PDF and image tool
-    plus sharing and automation, as slim rows in panels.
-  - The Dashboard (`#/dashboard`, `dashboard`): the tools most people need,
-    from every section. By default an everyday set (see PRESETS): common PDF,
-    image and video tools plus a few handy extras. "Customize" at the bottom
-    opens a dialog to pick the tools shown, starting from a preset for a kind
-    of user (everyday, documents, photos & video, developer); the choice is
-    saved in this browser (settings.ts). "Show all tools" lists everything.
+  - The Dashboard (the site root): the tools most people need, from every
+    section. By default an everyday set (see PRESETS): common PDF, image and
+    video tools plus a few handy extras. "Customize" at the bottom opens a
+    dialog to pick the tools shown, starting from a preset for a kind of user
+    (everyday, documents, photos & video, developer); the choice is saved in
+    this browser (settings.ts). "Show all tools" lists everything.
+  - The PDF home (`pdf/`) and the Image home (`image/`): every tool of that
+    kind, plus sharing and automation, as slim rows in panels.
 
-  On both, the search box stays pinned at the top and searches every tool in
-  every section (PDF, image, video, IT): typing filters the panels, Enter
-  opens the best match, and a match opens the tool itself, not its section's
-  home page. "/" jumps to the box from anywhere.
+  On all three, the search box stays pinned at the top and searches every
+  tool in every section (PDF, image, video, IT): typing filters the panels,
+  Enter opens the best match, and a match opens the tool itself, not its
+  section's home page. "/" jumps to the box from anywhere.
 
   Dropping files anywhere on the page (or picking them with "Open a file")
   filters the list to tools that accept them; picking a tool then opens it with
@@ -30,7 +30,8 @@
   import { IT_HOME, RECORD_HOME, VIDEO_HOME, itToolHref, videoToolHref } from '../section';
   import DashboardDialog, { type DashboardPreset } from '../components/DashboardDialog.svelte';
 
-  let { onOpen, dashboard = false }: { onOpen: (id: string, files?: File[]) => void; dashboard?: boolean } = $props();
+  let { onOpen, view }: { onOpen: (id: string, files?: File[]) => void; view: 'dashboard' | 'pdf' | 'image' } = $props();
+  const dashboard = $derived(view === 'dashboard');
 
   type PanelId = 'pdf' | 'image' | 'video' | 'it' | 'more';
 
@@ -50,7 +51,7 @@
     open: () => void;
     href?: string;
     demanding?: string;
-    /** A shortcut listed on the PDF & image home only: search and the dashboard have the real thing. */
+    /** A shortcut listed on the PDF and Image homes only: search and the dashboard have the real thing. */
     listOnly?: boolean;
   }
 
@@ -273,11 +274,11 @@
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   /** Searching or filtering by files looks at every tool, on the dashboard or not. */
   const filtering = $derived(words.length > 0 || dropped.length > 0);
-  /** Everything but the PDF & image home's shortcuts. */
+  /** Everything but the PDF and Image homes' shortcuts. */
   const tools = $derived(entries.filter((e) => !e.listOnly));
   const visible = $derived(
     (dashboard || filtering ? tools : entries).filter((e) => {
-      if (!filtering) return dashboard ? showAll || shownKeys.has(e.key) : ['pdf', 'image', 'more'].includes(e.panel);
+      if (!filtering) return dashboard ? showAll || shownKeys.has(e.key) : e.panel === view || e.panel === 'more';
       const text = `${e.title} ${e.description} ${e.keywords ?? ''} ${e.group ?? ''} ${e.panel}`.toLowerCase();
       return words.every((w) => text.includes(w)) && (dropped.length === 0 || e.takes(dropped));
     }),
@@ -364,12 +365,12 @@
   {/if}
 {/snippet}
 
-{#snippet panel(id: PanelId)}
+{#snippet panel(id: PanelId, main = false)}
   {@const p = PANELS.find((x) => x.id === id)!}
   {@const items = inPanel(id)}
   {#if items.length}
     {@const subheads = p.groups && items.length >= SUBHEADS_FROM}
-    <section class="panel card" class:wide={subheads}>
+    <section class="panel card" class:wide={subheads} class:main>
       <h2>
         <span><span aria-hidden="true">{p.icon}</span> {p.label}</span>
         {#if p.href && !filtering}<a class="all" href={p.href}>{p.more} →</a>{/if}
@@ -399,9 +400,12 @@
   {#if dashboard}
     <h1>Your everyday tools</h1>
     <p class="muted">The tools you use most, from every section. Customize them at the bottom; search finds any tool.</p>
-  {:else}
-    <h1>Every PDF and image tool, right in your browser</h1>
+  {:else if view === 'pdf'}
+    <h1>Every PDF tool, right in your browser</h1>
     <p class="muted">Free and private: files are processed on your device and never uploaded.</p>
+  {:else}
+    <h1>Every image tool, right in your browser</h1>
+    <p class="muted">Free and private: photos are processed on your device and never uploaded.</p>
   {/if}
 </section>
 
@@ -429,6 +433,13 @@
   <p class="filtered muted">Showing tools for {dropped.length > 1 ? 'these files' : 'this file'}. Pick one to open {dropped.length > 1 ? 'them' : 'it'}.</p>
 {/if}
 
+{#if view === 'image' && !filtering}
+  <!-- The image tools take the wide column here. -->
+  <div class="panels">
+    {@render panel('image', true)}
+    <div class="side">{@render panel('more')}</div>
+  </div>
+{:else}
 <div class="panels">
   {#if inPanel('pdf').length}
     {@render panel('pdf')}
@@ -445,6 +456,7 @@
     {@render panel('video')}
     {@render panel('it')}
   </div>
+{/if}
 {/if}
 
 {#if visible.length === 0}
@@ -497,7 +509,7 @@
   /* Search bar: pinned under the app header while scrolling. */
   .bar {
     position: sticky;
-    top: 55px;
+    top: var(--header-h, 55px);
     z-index: 5;
     display: flex;
     gap: 8px;
@@ -600,6 +612,10 @@
     border-radius: 999px;
     padding: 8px 16px;
     font-size: 14px;
+  }
+  .main > .group {
+    columns: 2 220px;
+    column-gap: 10px;
   }
   .groups {
     columns: 2 220px;
@@ -708,7 +724,7 @@
       display: none;
     }
     .bar {
-      top: 55px;
+      top: var(--header-h, 55px);
       padding: 10px 0;
     }
     .groups {

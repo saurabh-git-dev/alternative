@@ -5,15 +5,18 @@
  */
 import { ACTIONS, VIDEO_ACTIONS } from '../actions';
 import { IT_TOOLS } from '../it/registry';
-import { itToolHref, section, sectionHref, videoToolHref, type Section } from './section';
+import { itToolHref, section, sectionHref, sectionOfCategory, videoToolHref, type Section } from './section';
 import type { CatalogEntry } from './components/ToolCatalog.svelte';
 
-const SECTION_NAMES: Record<Section, string> = { files: 'PDF & image', video: 'Video', record: 'Screen recorder', it: 'IT tools', chat: 'Chat' };
+const SECTION_NAMES: Record<Section, string> = { home: 'Dashboard', pdf: 'PDF', image: 'Image', video: 'Video', record: 'Screen recorder', it: 'IT tools' };
 
 /** Every tool outside the current section, each tagged with the section it's in. */
 export function otherSectionTools(): CatalogEntry[] {
   const tools: (CatalogEntry & { section: Section })[] = [
-    ...ACTIONS.map((a) => ({ key: a.id, icon: a.icon, title: a.title, description: a.description, group: a.category, href: sectionHref('files', `#/tool/${a.id}`), section: 'files' as const })),
+    ...ACTIONS.map((a) => {
+      const s = sectionOfCategory(a.category);
+      return { key: a.id, icon: a.icon, title: a.title, description: a.description, group: a.category, href: sectionHref(s, `#/tool/${a.id}`), section: s };
+    }),
     ...VIDEO_ACTIONS.map((a) => ({ key: a.id, icon: a.icon, title: a.title, description: a.description, keywords: 'video', group: a.category, href: videoToolHref(a.id), section: 'video' as const })),
     ...IT_TOOLS.map((t) => ({ key: `it:${t.id}`, icon: t.icon, title: t.title, description: t.description, keywords: t.keywords, group: t.category, href: itToolHref(t.id), section: 'it' as const })),
   ];

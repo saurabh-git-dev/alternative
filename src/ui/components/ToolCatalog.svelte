@@ -131,7 +131,7 @@
     gap: 8px;
     align-items: center;
     position: sticky;
-    top: 55px;
+    top: var(--header-h, 55px);
     z-index: 5;
     max-width: 640px;
     margin: 0 auto;

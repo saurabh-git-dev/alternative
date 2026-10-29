@@ -4,6 +4,21 @@ PDF, image and video tools, a screen recorder, and developer (IT) tools, that
 run entirely in your browser. Files are processed on your device with
 WebAssembly engines and the browser's own codecs, and are never uploaded.
 
+## Pages
+
+| Path | What's there |
+|---|---|
+| `/` | Dashboard: the tools most people need, from every section. Customize it (presets for everyday, documents, photos & video, developers) with the button at the bottom |
+| `pdf/` | Every PDF tool |
+| `image/` | Every image tool |
+| `video/` | Video tools |
+| `record/` | Screen recorder |
+| `it/` | Developer (IT) tools |
+
+The search box on any home page finds every tool in every section and opens
+it directly. Connect (in the header) sends files and text between devices,
+with chat and voice and video calls.
+
 ## Tools
 
 | Area | Tools |

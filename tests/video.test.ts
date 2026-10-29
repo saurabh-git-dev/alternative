@@ -134,15 +134,19 @@ describe('video tools', () => {
 
 describe('sections', () => {
   it('tells sections apart by path', () => {
-    expect(sectionOf('/alternative/')).toBe('files');
+    expect(sectionOf('/alternative/')).toBe('home');
+    expect(sectionOf('/alternative/pdf/')).toBe('pdf');
+    expect(sectionOf('/image/index.html')).toBe('image');
     expect(sectionOf('/alternative/video/')).toBe('video');
     expect(sectionOf('/record/index.html')).toBe('record');
     expect(sectionOf('/alternative/it/')).toBe('it');
-    expect(sectionOf('/alternative/chat/')).toBe('chat');
+    // chat/ is gone: Connect has chat and calls now.
+    expect(sectionOf('/alternative/chat/')).toBe('home');
   });
   it('links between sections relatively', () => {
-    expect(sectionHref('video', '#/', 'files')).toBe('video/');
-    expect(sectionHref('files', '#/', 'video')).toBe('../');
+    expect(sectionHref('video', '#/', 'home')).toBe('video/');
+    expect(sectionHref('home', '#/', 'video')).toBe('../');
+    expect(sectionHref('pdf', '#/tool/pdf.merge', 'image')).toBe('../pdf/#/tool/pdf.merge');
     expect(sectionHref('record', '#/', 'it')).toBe('../record/');
     expect(sectionHref('video', '#/tool/video.trim', 'record')).toBe('../video/#/tool/video.trim');
     expect(sectionHref('video', '#/x', 'video')).toBe('#/x');

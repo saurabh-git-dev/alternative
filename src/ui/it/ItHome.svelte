@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
   import { IT_CATEGORIES, IT_TOOLS } from '../../it/registry';
-  import { FILES_HOME } from '../section';
+  import { PDF_HOME } from '../section';
   import ToolCatalog, { type CatalogEntry } from '../components/ToolCatalog.svelte';
   import { otherSectionTools } from '../other-tools';
 
@@ -28,7 +28,7 @@
 </section>
 
 <ToolCatalog {entries} groups={GROUPS} others={otherSectionTools()} placeholder="Search tools, e.g. “json” or “uuid”" label="Search IT tools">
-  {#snippet empty()}look in the <a href={FILES_HOME}>PDF & image tools</a>{/snippet}
+  {#snippet empty()}look in the <a href={PDF_HOME}>PDF tools</a>{/snippet}
 </ToolCatalog>
 
 <style>

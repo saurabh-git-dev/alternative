@@ -1,6 +1,6 @@
 /**
- * Voice and video calls with connected devices, on the hidden `chat/` page
- * only (see core/call.ts for how the media travels). One call at a time: a
+ * Voice and video calls with connected devices, on every page of the site
+ * and in the native apps (see core/call.ts for how the media travels). One call at a time: a
  * device that rings during a call hears "busy".
  *
  * - Calling: this side turns on its mic (and camera), then rings. The other

@@ -42,7 +42,7 @@ export function setupInstall(): void {
   // Only built sites have sw.js; in dev it would cache files Vite serves fresh.
   // The native apps bundle every file already, so they skip it too.
   if (import.meta.env.PROD && !isNativeApp() && 'serviceWorker' in navigator) {
-    const root = new URL(sectionHref('files'), location.href);
+    const root = new URL(sectionHref('home'), location.href);
     root.hash = '';
     navigator.serviceWorker.register(new URL('sw.js', root), { scope: root.pathname }).catch((e: unknown) => {
       console.warn('Service worker not registered; the app still works online.', e);

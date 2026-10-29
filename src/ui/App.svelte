@@ -1,29 +1,28 @@
 <!--
   App shell: header and a tiny hash router.
-  Routes: `#/` (home), `#/dashboard` (your pick of tools from every
-  section, see pages/Home.svelte), `#/tool/<action id>`, `#/share`, share links
-  `#/s/<data>` / `#/q/<data>` (see core/share.ts), connected devices
+  Routes: `#/` (the section's home), `#/tool/<action id>`, `#/share`, share
+  links `#/s/<data>` / `#/q/<data>` (see core/share.ts), connected devices
   `#/connect[/…]` and `#/d/<invite>` (see connect/ConnectPage.svelte; the
-  old `#/direct`, `#/direct/receive` and `#/scan` open it too), `#/pipeline[/<data>]`
-  (see core/pipeline.ts) and `#/compare`. Hash routing works on any
-  static host with no server configuration.
+  old `#/direct`, `#/direct/receive` and `#/scan` open it too),
+  `#/pipeline[/<data>]` (see core/pipeline.ts) and `#/compare`. Hash routing
+  works on any static host with no server configuration.
 
-  The same app also serves the Video (`video/`), Screen recorder (`record/`)
-  and IT tools (`it/`) sections (see ui/section.ts). `#/` is each section's
-  home; in `it/`, `#/<tool id>[/<state>]` opens an IT tool (see
+  The same app serves every section (see ui/section.ts): the Dashboard at the
+  root, then `pdf/`, `image/`, `video/`, `record/` and `it/`. `#/` is each
+  section's home; `#/<tool id>[/<state>]` opens an IT tool (see
   it/registry.ts), and `#/tool/<video tool>/recording/<id>` opens a video
-  tool with a saved recording loaded. Every other route works everywhere.
+  tool with a saved recording loaded. Every other route works everywhere,
+  and the header highlights the section of whatever is open.
 
-  `chat/` is unlisted (no link to it, unless this browser switched one on
-  from the chat page, see chat-link.svelte.ts): its home page, and its
-  `#/connect…` routes, are Connect with voice and video calls (see
-  connect/calls.svelte.ts).
+  Connect includes chat and voice and video calls (see
+  connect/calls.svelte.ts). In the native apps (src-tauri/) it has two more
+  tabs (see connect/ConnectTabs.svelte): A2B, a page for browsers on the
+  network (`#/lan`, connect/BrowserSharePage.svelte), and A2A, Local share
+  with other apps (`#/local[/…]`, connect/LocalPage.svelte): devices on the
+  same network, paired with a PIN, with chat, files and calls.
 
-  In the native apps (src-tauri/) Connect has two more tabs (see
-  connect/ConnectTabs.svelte): A2B, a page for browsers on the network
-  (`#/lan`, connect/BrowserSharePage.svelte), and A2A, Local share with
-  other apps (`#/local[/…]`, connect/LocalPage.svelte): devices on the same network, paired with
-  a PIN, with chat, files and calls. Calls are on everywhere in the apps.
+  On narrow screens the section menu moves to a row of its own under the
+  logo and scrolls sideways.
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
@@ -46,13 +45,12 @@
   import TextEditor from './connect/TextEditor.svelte';
   import CallPanel from './connect/CallPanel.svelte';
   import { enableCalls } from './connect/calls.svelte';
-  import { chatLink } from './chat-link.svelte';
   import ItHome from './it/ItHome.svelte';
   import ItTool from './it/ItTool.svelte';
   import VideoHome from './video/VideoHome.svelte';
   import RecordHome from './record/RecordHome.svelte';
   import { getItTool } from '../it/registry';
-  import { CHAT_HOME, FILES_HOME, IT_HOME, RECORD_HOME, VIDEO_HOME, section, sectionHref, type Section } from './section';
+  import { DASHBOARD_HOME, IMAGE_HOME, IT_HOME, PDF_HOME, RECORD_HOME, VIDEO_HOME, section, sectionOfCategory, type Section } from './section';
   import { PIPELINE_ROUTE } from '../core/pipeline';
   import { LINK_ROUTE, QR_ROUTE } from '../core/share';
   import { DIRECT_ROUTE } from '../core/direct';
@@ -63,7 +61,7 @@
 
   const native = isNativeApp();
   let hash = $state(location.hash);
-  if (section === 'chat' || native) enableCalls();
+  enableCalls();
   if (native) {
     startLocal();
     startIncomingShare();
@@ -110,9 +108,7 @@
       ? 'it-tool'
       : hash === PIPELINE_ROUTE || hash.startsWith(`${PIPELINE_ROUTE}/`)
         ? 'pipeline'
-        : hash === '#/dashboard'
-          ? 'dashboard'
-          : hash === '#/compare'
+        : hash === '#/compare'
           ? 'compare'
           : hash === '#/share'
           ? 'share'
@@ -122,15 +118,16 @@
           ? 'lan'
           : hash === '#/connect' || hash.startsWith('#/connect/') || hash === '#/scan' || hash.startsWith('#/direct') || hash.startsWith(`#${DIRECT_ROUTE}`)
           ? 'connect'
-          : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : section === 'chat' ? 'connect' : `${section}-home`,
+          : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : `${section}-home`,
   );
 
   const HOME_TITLES: Record<Section, string> = {
-    files: 'Tools · PDF, image & IT tools in your browser',
+    home: 'Tools · PDF, image, video & IT tools in your browser',
+    pdf: 'PDF tools',
+    image: 'Image tools',
     video: 'Video tools',
     record: 'Screen recorder',
     it: 'IT tools',
-    chat: 'Chat',
   };
 
   $effect(() => {
@@ -142,8 +139,6 @@
       ? HOME_TITLES[section]
       : page === 'pipeline'
         ? 'Pipeline · Tools'
-        : page === 'dashboard'
-        ? 'Dashboard · Tools'
         : page === 'compare'
         ? 'Compare PDFs · Tools'
         : page === 'share'
@@ -153,27 +148,28 @@
         : page === 'lan'
         ? 'Share with a browser · Tools'
         : page === 'connect'
-        ? section === 'chat' ? 'Chat' : 'Connect devices · Tools'
+        ? 'Connect devices · Tools'
         : 'Shared file · Tools';
   });
 
-  /** Not a section of its own: a page that works in any, linked from the root one. */
-  const DASHBOARD = { id: 'dashboard' as const, href: sectionHref('files', '#/dashboard'), icon: '⭐', label: 'Dashboard', short: 'Mine' };
-  const SECTIONS: { id: Section; href: string; icon: string; label: string; short: string }[] = [
-    { id: 'files', href: FILES_HOME, icon: '📄', label: 'PDF & Image', short: 'Files' },
-    { id: 'video', href: VIDEO_HOME, icon: '🎬', label: 'Video', short: 'Video' },
-    { id: 'record', href: RECORD_HOME, icon: '⏺️', label: 'Screen recorder', short: 'Record' },
-    { id: 'it', href: IT_HOME, icon: '🛠️', label: 'IT tools', short: 'IT' },
+  const SECTIONS: { id: Section; href: string; icon: string; label: string }[] = [
+    { id: 'home', href: DASHBOARD_HOME, icon: '⭐', label: 'Dashboard' },
+    { id: 'pdf', href: PDF_HOME, icon: '📄', label: 'PDF' },
+    { id: 'image', href: IMAGE_HOME, icon: '🖼️', label: 'Image' },
+    { id: 'video', href: VIDEO_HOME, icon: '🎬', label: 'Video' },
+    { id: 'record', href: RECORD_HOME, icon: '⏺️', label: 'Record' },
+    { id: 'it', href: IT_HOME, icon: '🛠️', label: 'IT tools' },
   ];
-  const CHAT = { id: 'chat' as const, href: CHAT_HOME, icon: '💬', label: 'Chat', short: 'Chat' };
-  /** Chat joins the menu only in a browser that switched it on. */
-  const shownSections = $derived([DASHBOARD, ...SECTIONS, ...(chatLink.shown ? [CHAT] : [])]);
-  /** The highlighted tab: the dashboard while it's open, else the section. */
-  const activeTab = $derived(page === 'dashboard' ? 'dashboard' : section);
+  /** The highlighted tab: the section of the tool that's open, else this page's section. */
+  const activeTab = $derived<Section>(action ? sectionOfCategory(action.category) : itTool ? 'it' : section);
 
   const connected = $derived(connectedCount());
   const nearbyOnline = $derived(localHub.devices.filter((d) => d.linked).length);
   const live = $derived(liveDevices().length);
+
+  /** Sticky bars below the header (search boxes) sit under it: see --header-h. */
+  let headerHeight = $state(55);
+  $effect(() => document.documentElement.style.setProperty('--header-h', `${headerHeight}px`));
 
   function toggleTheme() {
     theme = theme === 'dark' ? 'light' : 'dark';
@@ -186,15 +182,15 @@
   }
 </script>
 
-<header>
-  <a class="logo" href="#/">
+<header bind:clientHeight={headerHeight}>
+  <a class="logo" href={DASHBOARD_HOME}>
     <span class="mark" aria-hidden="true">T</span>
     <span class="name">Tools</span>
   </a>
   <nav class="sections" aria-label="Sections">
-    {#each shownSections as s (s.id)}
-      <a href={s.href} class:active={activeTab === s.id} aria-current={activeTab === s.id ? 'page' : undefined} title={s.label}>
-        <span aria-hidden="true">{s.icon}</span> <span class="long">{s.label}</span><span class="short">{s.short}</span>
+    {#each SECTIONS as s (s.id)}
+      <a href={s.href} class:active={activeTab === s.id} aria-current={activeTab === s.id ? 'page' : undefined} title={s.label} {@attach (el) => { if (activeTab === s.id) el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }}>
+        <span aria-hidden="true">{s.icon}</span> {s.label}
       </a>
     {/each}
   </nav>
@@ -250,8 +246,6 @@
     {#key hash}
       <PipelinePage encoded={hash.slice(PIPELINE_ROUTE.length + 1)} />
     {/key}
-  {:else if page === 'dashboard'}
-    <Home onOpen={openTool} dashboard />
   {:else if page === 'compare'}
     <Compare />
   {:else if page === 'share'}
@@ -259,7 +253,7 @@
   {:else if page === 'connect'}
     {#if native}<ConnectTabs active="connect" />{/if}
     {#key hash}
-      <ConnectPage {hash} onOpen={openTool} calls={section === 'chat'} />
+      <ConnectPage {hash} onOpen={openTool} />
     {/key}
   {:else if page === 'lan'}
     <ConnectTabs active="lan" />
@@ -269,13 +263,15 @@
     <LocalPage {hash} onOpen={openTool} />
   {:else if page === 'received'}
     <Received {hash} onOpen={openTool} />
+  {:else if page === 'pdf-home' || page === 'image-home'}
+    <Home onOpen={openTool} view={section === 'image' ? 'image' : 'pdf'} />
   {:else}
-    <Home onOpen={openTool} />
+    <Home onOpen={openTool} view="dashboard" />
   {/if}
 </main>
 
 <Notice onOpen={openTool} />
-{#if section === 'chat' || native}<CallPanel />{/if}
+<CallPanel />
 <AskDialog />
 {#if native}
   <PairPinDialog />
@@ -292,10 +288,10 @@
     Open source, AGPL-3.0. Every tool runs in your browser; nothing you type is sent anywhere.
   {:else if section === 'video'}
     Open source, AGPL-3.0. Powered by WebCodecs (via Mediabunny), ffmpeg.wasm and gifenc.
-  {:else if section === 'chat'}
-    Open source, AGPL-3.0. Chat and calls go straight between your devices, end-to-end encrypted.
   {:else if section === 'record'}
     Open source, AGPL-3.0. Recorded with your browser's MediaRecorder and kept in its own storage.
+  {:else if section === 'image'}
+    Open source, AGPL-3.0. Powered by the Squoosh codecs, Tesseract and ONNX Runtime.
   {:else}
     Open source, AGPL-3.0. Powered by qpdf, MuPDF, Ghostscript, pdf-lib, the Squoosh codecs and ONNX Runtime.
   {/if}
@@ -339,8 +335,15 @@
     padding: 3px;
     border-radius: 999px;
     background: var(--surface-2);
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .sections::-webkit-scrollbar {
+    display: none;
   }
   .sections a {
+    flex: none;
     padding: 4px 12px;
     border-radius: 999px;
     color: var(--text-2);
@@ -351,9 +354,6 @@
   }
   .sections a:hover {
     color: var(--text);
-  }
-  .sections .short {
-    display: none;
   }
   .sections a.active {
     background: var(--surface);
@@ -440,61 +440,57 @@
     font-size: 13px;
     padding: 24px 16px 40px;
   }
-  @media (max-width: 980px) {
+  @media (max-width: 1180px) {
     .badge {
       display: none;
     }
     .scan {
       margin-left: auto;
     }
-    .sections .long {
-      display: none;
-    }
-    .sections .short {
-      display: inline;
-    }
   }
-  /* Narrow phones: icons only, except the section you're in. */
-  @media (max-width: 420px) {
-    .sections a:not(.active) .short {
-      display: none;
+  /*
+   * Narrow screens: logo and buttons on top, the section menu on a row of its
+   * own below, full width and scrolling sideways (the open section is
+   * scrolled into view).
+   */
+  @media (max-width: 860px) {
+    header {
+      flex-wrap: wrap;
+      gap: 8px 10px;
+      padding-bottom: 8px;
+    }
+    .sections {
+      order: 1;
+      width: 100%;
+      border-radius: 12px;
+      scroll-snap-type: x proximity;
+    }
+    .sections a {
+      scroll-snap-align: start;
+      padding: 6px 12px;
+      border-radius: 9px;
     }
   }
   @media (max-width: 560px) {
     main {
       padding-top: 16px;
     }
-    .badge {
-      display: none;
-    }
     header {
-      gap: 8px;
+      padding-top: 10px;
     }
-    .logo .name,
     .scan .label,
     .install span {
       display: none;
     }
-    .sections {
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-    .sections a {
-      padding: 4px 8px;
-      font-size: 13px;
-    }
-    .sections .long {
-      display: none;
-    }
-    .sections .short {
-      display: inline;
-    }
     .scan {
-      margin-left: auto;
       padding: 5px 9px;
     }
     .install {
       padding: 5px 9px;
+    }
+    .sections a {
+      font-size: 13.5px;
+      padding: 6px 10px;
     }
   }
 </style>

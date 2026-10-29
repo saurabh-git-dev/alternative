@@ -1,5 +1,5 @@
 <!--
-  The call on screen (chat/ page only, see connect/calls.svelte.ts): a ring
+  The call on screen (see connect/calls.svelte.ts): a ring
   card while a call comes in or goes out, then the call itself, full screen
   on phones and a floating window on bigger screens, over whatever page is
   open, so you can keep chatting or using the tools.
