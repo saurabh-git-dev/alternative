@@ -12,6 +12,7 @@
   import { IT_HOME } from '../section';
   import TransformTool from './TransformTool.svelte';
   import './it.css';
+  import DuplicateButton from '../components/DuplicateButton.svelte';
 
   let { tool, payload = '' }: { tool: ItToolInfo; payload?: string } = $props();
 
@@ -33,6 +34,7 @@
     <h1>{tool.title}</h1>
     <p class="muted">{tool.description}</p>
   </div>
+  <DuplicateButton />
 </div>
 
 {#if badLink}

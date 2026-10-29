@@ -26,6 +26,7 @@
   import { isConstrained } from '../../core/device';
   import VideoWorkspace from '../components/VideoWorkspace.svelte';
   import { videoPoster } from '../video-poster';
+  import DuplicateButton from '../components/DuplicateButton.svelte';
 
   let { action, initialFiles = [] }: { action: ActionDefinition; initialFiles?: File[] } = $props();
 
@@ -157,6 +158,7 @@
     <h1>{action.title}</h1>
     <p class="muted">{action.description}</p>
   </div>
+  <DuplicateButton />
 </div>
 {#if deviceWarning}
   <p class="device-warning" role="note"><strong>Heads up on this device:</strong> {deviceWarning} A computer works best for big files.</p>

@@ -9,6 +9,11 @@
   import { isConstrained } from '../../core/device';
   import { RECORD_HOME } from '../section';
   import ToolCatalog, { type CatalogEntry } from '../components/ToolCatalog.svelte';
+  import { otherSectionTools } from '../other-tools';
+  import { usePane } from '../pane';
+
+  /** Window-wide shortcuts and drops go to the tab in use only (see pane.ts). */
+  const pane = usePane();
 
   let { onOpen }: { onOpen: (id: string, files?: File[]) => void } = $props();
 
@@ -39,6 +44,7 @@
   $effect(() => {
     const hasFiles = (e: DragEvent) => e.dataTransfer?.types.includes('Files');
     const onOver = (e: DragEvent) => {
+      if (!pane.active) return;
       if (!hasFiles(e)) return;
       e.preventDefault();
       dragging = true;
@@ -47,6 +53,7 @@
       if (!e.relatedTarget) dragging = false;
     };
     const onDrop = (e: DragEvent) => {
+      if (!pane.active) return;
       if (!hasFiles(e)) return;
       e.preventDefault();
       dragging = false;
@@ -76,7 +83,7 @@
   <p class="note muted">This browser has no built-in video encoder (WebCodecs), so tools use ffmpeg.wasm instead: a 32 MB download the first time, and slower.</p>
 {/if}
 
-<ToolCatalog {entries} groups={GROUPS} placeholder="Search tools, e.g. “compress” or “gif”" label="Search video tools">
+<ToolCatalog {entries} groups={GROUPS} others={otherSectionTools('video')} placeholder="Search tools, e.g. “compress” or “gif”" label="Search video tools">
   {#snippet extra()}
     <input bind:this={picker} type="file" accept="video/*,.mkv,.avi,.wmv,.flv,.ts,.mts" hidden onchange={(e) => (dropped = [...(e.currentTarget.files ?? [])])} />
     {#if dropped.length}

@@ -17,7 +17,8 @@
     { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "PDF & image tools", "short_name": "Files", "url": "./" },
+    { "name": "PDF tools", "short_name": "PDF", "url": "pdf/" },
+    { "name": "Image tools", "short_name": "Image", "url": "image/" },
     { "name": "Video tools", "short_name": "Video", "url": "video/" },
     { "name": "Screen recorder", "short_name": "Record", "url": "record/" },
     { "name": "IT tools", "short_name": "IT", "url": "it/" }

@@ -11,9 +11,8 @@
  *   only, gone when it closes) and both sides reconnect by themselves. Chat
  *   text is kept with it; files are kept in IndexedDB (connect/history-db.ts)
  *   until the session ends.
- * - Calls (the hidden `chat/` page and the native apps, see
- *   connect/calls.svelte.ts) plug in with `listenForCalls`; elsewhere a
- *   ringing call is turned down.
+ * - Calls (see connect/calls.svelte.ts) plug in with `listenForCalls`;
+ *   without that a ringing call is turned down.
  * - The native apps' Local share devices (connect/local.svelte.ts) live here
  *   too, with a `LocalConnection` instead of a `DirectTransfer`; both are a
  *   `Connection` (core/connection.ts), so the chat, files and calls work the

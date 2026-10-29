@@ -117,15 +117,15 @@ export default defineConfig({
   worker: { format: 'es' },
   build: {
     target: 'es2022',
-    // Five pages, one app: PDF & image tools at the root, then video/, record/ and it/ (see src/ui/section.ts), plus the unlisted chat/.
+    // Six pages, one app: the Dashboard at the root, then pdf/, image/, video/, record/ and it/ (see src/ui/section.ts).
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        pdf: fileURLToPath(new URL('./pdf/index.html', import.meta.url)),
+        image: fileURLToPath(new URL('./image/index.html', import.meta.url)),
         video: fileURLToPath(new URL('./video/index.html', import.meta.url)),
         record: fileURLToPath(new URL('./record/index.html', import.meta.url)),
         it: fileURLToPath(new URL('./it/index.html', import.meta.url)),
-        // Unlisted: nothing links here (see src/ui/section.ts).
-        chat: fileURLToPath(new URL('./chat/index.html', import.meta.url)),
       },
     },
   },

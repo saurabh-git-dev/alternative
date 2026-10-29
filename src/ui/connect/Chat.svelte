@@ -2,7 +2,7 @@
   Chat with one connected device: text and files, either way, in the order
   they were sent. Received files preview in place and open in any tool
   that takes them (Edit). Type and press Enter to send text; attach, drop or
-  paste files to send them. With `calls` (the chat/ page), the header also
+  paste files to send them. With `calls`, the header also
   has voice and video call buttons, and calls show as lines in the chat.
 
   The same chat serves Local share devices (connect/LocalPage.svelte): they

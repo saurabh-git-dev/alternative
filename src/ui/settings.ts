@@ -138,3 +138,28 @@ export function saveRecorderOptions(options: object): void {
     /* ignore */
   }
 }
+
+// ---------------------------------------------------------------------------
+// Home dashboard: which tools it shows (see pages/Home.svelte)
+// ---------------------------------------------------------------------------
+
+/** The keys of the tools picked for the home page, or null for the default set. */
+export function loadDashboard(): string[] | null {
+  try {
+    const raw = localStorage.getItem(`${PREFIX}dashboard`);
+    const keys: unknown = raw ? JSON.parse(raw) : null;
+    return Array.isArray(keys) ? keys.filter((k): k is string => typeof k === 'string') : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Pass null to go back to the default set. */
+export function saveDashboard(keys: string[] | null): void {
+  try {
+    if (keys) localStorage.setItem(`${PREFIX}dashboard`, JSON.stringify(keys));
+    else localStorage.removeItem(`${PREFIX}dashboard`);
+  } catch {
+    /* storage unavailable: the choice lasts until the page is closed */
+  }
+}
