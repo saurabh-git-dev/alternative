@@ -50,3 +50,15 @@ export function itToolHref(id: string, state?: ToolState): string {
 export function videoToolHref(id: string, suffix = ''): string {
   return sectionHref('video', `#/tool/${id}${suffix}`);
 }
+
+/** Name and icon of each section, for the menu and tab titles. */
+export const SECTION_INFO: Record<Section, { icon: string; label: string; home: string }> = {
+  home: { icon: '⭐', label: 'Dashboard', home: 'Dashboard' },
+  pdf: { icon: '📄', label: 'PDF', home: 'PDF tools' },
+  image: { icon: '🖼️', label: 'Image', home: 'Image tools' },
+  video: { icon: '🎬', label: 'Video', home: 'Video tools' },
+  record: { icon: '⏺️', label: 'Record', home: 'Screen recorder' },
+  it: { icon: '🛠️', label: 'IT tools', home: 'IT tools' },
+};
+
+export const SECTIONS: Section[] = ['home', 'pdf', 'image', 'video', 'record', 'it'];

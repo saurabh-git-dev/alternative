@@ -14,6 +14,10 @@
   import type { TextItem } from '../../core/types';
   import { pageText, pageWithoutText } from '../../core/runner';
   import PdfPageView from './PdfPageView.svelte';
+  import { usePane } from '../pane';
+
+  /** Window-wide shortcuts and drops go to the tab in use only (see pane.ts). */
+  const pane = usePane();
 
   let {
     bytes,
@@ -215,6 +219,7 @@
 
   $effect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!pane.active) return;
       if ((e.target as HTMLElement).closest('textarea, input, select')) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();

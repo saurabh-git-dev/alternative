@@ -27,7 +27,7 @@
   <p class="muted">Encoders, converters, generators and more. Everything runs on your device; nothing is sent anywhere.</p>
 </section>
 
-<ToolCatalog {entries} groups={GROUPS} others={otherSectionTools()} placeholder="Search tools, e.g. “json” or “uuid”" label="Search IT tools">
+<ToolCatalog {entries} groups={GROUPS} others={otherSectionTools('it')} placeholder="Search tools, e.g. “json” or “uuid”" label="Search IT tools">
   {#snippet empty()}look in the <a href={PDF_HOME}>PDF tools</a>{/snippet}
 </ToolCatalog>
 

@@ -16,7 +16,12 @@ WebAssembly engines and the browser's own codecs, and are never uploaded.
 | `it/` | Developer (IT) tools |
 
 The search box on any home page finds every tool in every section and opens
-it directly. Connect (in the header) sends files and text between devices,
+it directly.
+
+Several tools can be open at once in the app's own tabs: **＋** in the header
+(or **⧉ New copy** on a tool, e.g. for two JWTs) opens one, each tab keeps its
+input and files while you use another, and **Split** shows two tabs side by
+side (three on very wide screens). Connect (in the header) sends files and text between devices,
 with chat and voice and video calls.
 
 ## Tools

@@ -14,6 +14,10 @@
   import type { Box } from '../../core/types';
   import { formatTime, maskActive, type MaskBox, type MaskStyle, type TimeRange } from '../../core/video';
   import { dragBox, drawBox, type Handle } from './BoxDrag';
+  import { usePane } from '../pane';
+
+  /** Window-wide shortcuts and drops go to the tab in use only (see pane.ts). */
+  const pane = usePane();
 
   type Mode = 'trim' | 'time' | 'crop' | 'masks';
   type Value = TimeRange | number | Box | MaskBox[];
@@ -197,6 +201,7 @@
 
   $effect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!pane.active) return;
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]')) return;
       if (e.key === ' ') {
         e.preventDefault();

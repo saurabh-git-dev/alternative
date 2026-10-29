@@ -2,6 +2,11 @@
   Drop area + file picker. Also accepts pasted files (Ctrl/Cmd+V) when `paste` is set.
 -->
 <script lang="ts">
+  import { usePane } from '../pane';
+
+  /** Window-wide shortcuts and drops go to the tab in use only (see pane.ts). */
+  const pane = usePane();
+
   let {
     accept,
     multiple = true,
@@ -31,7 +36,7 @@
 
   $effect(() => {
     if (!paste) return;
-    const onPaste = (e: ClipboardEvent) => take(e.clipboardData?.files);
+    const onPaste = (e: ClipboardEvent) => pane.active && take(e.clipboardData?.files);
     addEventListener('paste', onPaste);
     return () => removeEventListener('paste', onPaste);
   });

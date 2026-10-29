@@ -33,6 +33,10 @@
 
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { usePane } from '../pane';
+
+  /** Window-wide shortcuts and drops go to the tab in use only (see pane.ts). */
+  const pane = usePane();
 
   let {
     entries,
@@ -74,6 +78,7 @@
 
   $effect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!pane.active) return;
       const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]');
       if (e.key === '/' && !typing) {
         e.preventDefault();

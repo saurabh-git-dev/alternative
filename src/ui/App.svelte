@@ -25,17 +25,9 @@
   logo and scrolls sideways.
 -->
 <script lang="ts">
-  import { untrack } from 'svelte';
-  import Home from './pages/Home.svelte';
-  import Tool from './pages/Tool.svelte';
-  import Share from './pages/Share.svelte';
-  import Received from './pages/Received.svelte';
-  import PipelinePage from './pages/Pipeline.svelte';
-  import Compare from './pages/Compare.svelte';
-  import ConnectPage from './connect/ConnectPage.svelte';
-  import LocalPage from './connect/LocalPage.svelte';
-  import ConnectTabs from './connect/ConnectTabs.svelte';
-  import BrowserSharePage from './connect/BrowserSharePage.svelte';
+  import { MediaQuery } from 'svelte/reactivity';
+  import Route from './Route.svelte';
+  import TabBar from './components/TabBar.svelte';
   import ShareDialog from './connect/ShareDialog.svelte';
   import { startIncomingShare } from './connect/incoming-share.svelte';
   import AskDialog from './connect/AskDialog.svelte';
@@ -45,81 +37,70 @@
   import TextEditor from './connect/TextEditor.svelte';
   import CallPanel from './connect/CallPanel.svelte';
   import { enableCalls } from './connect/calls.svelte';
-  import ItHome from './it/ItHome.svelte';
-  import ItTool from './it/ItTool.svelte';
-  import VideoHome from './video/VideoHome.svelte';
-  import RecordHome from './record/RecordHome.svelte';
-  import { getItTool } from '../it/registry';
-  import { DASHBOARD_HOME, IMAGE_HOME, IT_HOME, PDF_HOME, RECORD_HOME, VIDEO_HOME, section, sectionOfCategory, type Section } from './section';
-  import { PIPELINE_ROUTE } from '../core/pipeline';
-  import { LINK_ROUTE, QR_ROUTE } from '../core/share';
-  import { DIRECT_ROUTE } from '../core/direct';
-  import { getAction } from '../actions';
+  import { SECTIONS, SECTION_INFO, sectionHref, type Section } from './section';
+  import { describeRoute, parseRoute, sectionOfRoute } from './routes';
+  import { MAX_TABS, activate, currentTab, followHash, handFiles, navigate, openTab, shownTabs, workspace } from './tabs.svelte';
   import { connectedCount, hub, liveDevices } from './connect/devices.svelte';
   import { loadTheme, saveTheme, type Theme } from './settings';
   import { canInstall, install, isNativeApp } from '../pwa/install.svelte';
 
   const native = isNativeApp();
-  let hash = $state(location.hash);
   enableCalls();
   if (native) {
     startLocal();
     startIncomingShare();
   }
   let theme = $state<Theme>(loadTheme());
-  /** Files dropped on the home page, handed to the tool the user picks. */
-  let pending = $state<File[]>([]);
+
+  const tab = $derived(currentTab());
+  const route = $derived(parseRoute(tab.hash, native));
+  /** The section of what's open: highlighted in the menu, and picks the footer. */
+  const current = $derived<Section>(sectionOfRoute(route, tab.section));
+
+  // Split view needs room: two tabs side by side from 900px, three from 1500px.
+  const wide = new MediaQuery('min-width: 900px');
+  const wider = new MediaQuery('min-width: 1500px');
+  const panes = $derived(wider.current ? 3 : wide.current ? 2 : 1);
+  const shown = $derived(shownTabs(panes));
+  const split = $derived(shown.length > 1);
+
+  const scrollToTop = () => (split ? document.getElementById(`pane-${tab.id}`)?.scrollTo(0, 0) : scrollTo(0, 0));
 
   $effect(() => {
     const onHash = () => {
-      hash = location.hash;
-      window.scrollTo(0, 0);
+      followHash();
+      scrollToTop();
     };
+    // Back or forward to an entry with the same hash but another section (e.g. Dashboard ← IT tools).
+    const onPop = () => followHash();
     addEventListener('hashchange', onHash);
-    return () => removeEventListener('hashchange', onHash);
+    addEventListener('popstate', onPop);
+    return () => {
+      removeEventListener('hashchange', onHash);
+      removeEventListener('popstate', onPop);
+    };
   });
 
-  /** `#/tool/<id>` or `#/tool/<id>/recording/<recording id>`. */
-  const toolRoute = $derived(/^#\/tool\/([^/]+)(?:\/recording\/([\w-]+))?$/.exec(hash));
-  const action = $derived(toolRoute ? getAction(decodeURIComponent(toolRoute[1])) : undefined);
-  const recordingId = $derived(toolRoute?.[2]);
-  /** A recording opened in a tool: loaded from the library, then handed over like dropped files. */
-  let opened = $state<{ id: string; ready: boolean; error?: string } | null>(null);
+  /** Where each section's page is, to open its links in the tab instead of loading the page. */
+  const sectionPaths = SECTIONS.map((s) => ({ section: s, path: new URL(sectionHref(s), location.href).pathname }));
+
   $effect(() => {
-    const id = recordingId;
-    if (!id || untrack(() => opened?.id) === id) return;
-    opened = { id, ready: false };
-    import('./record/open')
-      .then(({ recordingFile }) => recordingFile(id))
-      .then((file) => {
-        pending = [file];
-        opened = { id, ready: true };
-      })
-      .catch((e: unknown) => (opened = { id, ready: false, error: e instanceof Error ? e.message : String(e) }));
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>('a[href]') : null;
+      if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return;
+      const url = new URL(a.href);
+      if (url.origin !== location.origin) return;
+      // Menu links name their section; other links to `#/…` here stay ordinary hash links.
+      const to = (a.dataset.section as Section | undefined) ?? (url.pathname !== location.pathname ? sectionPaths.find((p) => p.path === url.pathname)?.section : undefined);
+      if (!to) return;
+      e.preventDefault();
+      navigate(to, url.hash || '#/');
+      scrollToTop();
+    };
+    addEventListener('click', onClick);
+    return () => removeEventListener('click', onClick);
   });
-  /** `#/<id>` or `#/<id>/<state>` for an IT tool. */
-  const itRoute = $derived(/^#\/([a-z0-9-]+)(?:\/(.+))?$/.exec(hash));
-  const itTool = $derived(itRoute ? getItTool(itRoute[1]) : undefined);
-
-  const page = $derived(
-    action
-      ? 'tool'
-      : itTool
-      ? 'it-tool'
-      : hash === PIPELINE_ROUTE || hash.startsWith(`${PIPELINE_ROUTE}/`)
-        ? 'pipeline'
-        : hash === '#/compare'
-          ? 'compare'
-          : hash === '#/share'
-          ? 'share'
-          : native && (hash === '#/local' || hash.startsWith('#/local/'))
-          ? 'local'
-          : native && hash === '#/lan'
-          ? 'lan'
-          : hash === '#/connect' || hash.startsWith('#/connect/') || hash === '#/scan' || hash.startsWith('#/direct') || hash.startsWith(`#${DIRECT_ROUTE}`)
-          ? 'connect'
-          : hash.startsWith(`#${LINK_ROUTE}`) || hash.startsWith(`#${QR_ROUTE}`) ? 'received' : `${section}-home`,
-  );
 
   const HOME_TITLES: Record<Section, string> = {
     home: 'Tools · PDF, image, video & IT tools in your browser',
@@ -131,37 +112,8 @@
   };
 
   $effect(() => {
-    document.title = action
-      ? `${action.title} · Tools`
-      : itTool
-      ? `${itTool.title} · IT tools`
-      : page.endsWith('-home')
-      ? HOME_TITLES[section]
-      : page === 'pipeline'
-        ? 'Pipeline · Tools'
-        : page === 'compare'
-        ? 'Compare PDFs · Tools'
-        : page === 'share'
-        ? 'Share as link or QR · Tools'
-        : page === 'local'
-        ? 'Local share · Tools'
-        : page === 'lan'
-        ? 'Share with a browser · Tools'
-        : page === 'connect'
-        ? 'Connect devices · Tools'
-        : 'Shared file · Tools';
+    document.title = route.page === 'home' ? HOME_TITLES[tab.section] : `${describeRoute(route, tab.section).title} · ${route.itTool ? 'IT tools' : 'Tools'}`;
   });
-
-  const SECTIONS: { id: Section; href: string; icon: string; label: string }[] = [
-    { id: 'home', href: DASHBOARD_HOME, icon: '⭐', label: 'Dashboard' },
-    { id: 'pdf', href: PDF_HOME, icon: '📄', label: 'PDF' },
-    { id: 'image', href: IMAGE_HOME, icon: '🖼️', label: 'Image' },
-    { id: 'video', href: VIDEO_HOME, icon: '🎬', label: 'Video' },
-    { id: 'record', href: RECORD_HOME, icon: '⏺️', label: 'Record' },
-    { id: 'it', href: IT_HOME, icon: '🛠️', label: 'IT tools' },
-  ];
-  /** The highlighted tab: the section of the tool that's open, else this page's section. */
-  const activeTab = $derived<Section>(action ? sectionOfCategory(action.category) : itTool ? 'it' : section);
 
   const connected = $derived(connectedCount());
   const nearbyOnline = $derived(localHub.devices.filter((d) => d.linked).length);
@@ -169,7 +121,10 @@
 
   /** Sticky bars below the header (search boxes) sit under it: see --header-h. */
   let headerHeight = $state(55);
-  $effect(() => document.documentElement.style.setProperty('--header-h', `${headerHeight}px`));
+  $effect(() => {
+    document.documentElement.style.setProperty('--header-h', `${headerHeight}px`);
+    document.documentElement.style.setProperty('--chrome-h', `${headerHeight}px`);
+  });
 
   function toggleTheme() {
     theme = theme === 'dark' ? 'light' : 'dark';
@@ -177,20 +132,29 @@
   }
 
   function openTool(id: string, files: File[] = []) {
-    pending = files;
+    handFiles(files);
     location.hash = `#/tool/${id}`;
   }
 </script>
 
 <header bind:clientHeight={headerHeight}>
-  <a class="logo" href={DASHBOARD_HOME}>
+  <a class="logo" href={sectionHref('home')} data-section="home">
     <span class="mark" aria-hidden="true">T</span>
     <span class="name">Tools</span>
   </a>
   <nav class="sections" aria-label="Sections">
-    {#each SECTIONS as s (s.id)}
-      <a href={s.href} class:active={activeTab === s.id} aria-current={activeTab === s.id ? 'page' : undefined} title={s.label} {@attach (el) => { if (activeTab === s.id) el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }}>
-        <span aria-hidden="true">{s.icon}</span> {s.label}
+    {#each SECTIONS as s (s)}
+      <a
+        href={sectionHref(s)}
+        data-section={s}
+        class:active={current === s}
+        aria-current={current === s ? 'page' : undefined}
+        title={SECTION_INFO[s].home}
+        {@attach (el) => {
+          if (current === s) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        }}
+      >
+        <span aria-hidden="true">{SECTION_INFO[s].icon}</span> {SECTION_INFO[s].label}
       </a>
     {/each}
   </nav>
@@ -201,7 +165,7 @@
   <a
     class="scan"
     class:live={connected + nearbyOnline > 0}
-    class:active={page === 'connect' || page === 'local' || page === 'lan'}
+    class:active={route.page === 'connect' || route.page === 'local' || route.page === 'lan'}
     href="#/connect"
     title={connected + nearbyOnline ? `${connected + nearbyOnline} device${connected + nearbyOnline > 1 ? 's' : ''} connected` : live ? 'Reconnecting to your device' : 'Connect your phone or another computer to send files and text'}
   >
@@ -220,54 +184,33 @@
       ⬇️ <span>Install</span>
     </button>
   {/if}
+  {#if workspace.tabs.length < 2}
+    <button class="icon-btn" onclick={() => openTab()} disabled={workspace.tabs.length >= MAX_TABS} aria-label="New tab" title="New tab: keep this page open and use another tool beside it">＋</button>
+  {/if}
   <button class="icon-btn" onclick={toggleTheme} aria-label="Switch to {theme === 'dark' ? 'light' : 'dark'} theme">
     {theme === 'dark' ? '☀️' : '🌙'}
   </button>
+  {#if workspace.tabs.length > 1}
+    <TabBar {native} canSplit={panes > 1} {shown} />
+  {/if}
 </header>
 
-<main>
-  {#if action && recordingId && !(opened?.id === recordingId && opened.ready)}
-    <p class="muted loading">{opened?.error ? `Couldn't open the recording: ${opened.error}` : 'Opening recording…'}</p>
-  {:else if action}
-    {#key `${action.id}/${recordingId ?? ''}`}
-      <Tool {action} initialFiles={pending} />
-    {/key}
-  {:else if itTool}
-    {#key hash}
-      <ItTool tool={itTool} payload={itRoute?.[2]} />
-    {/key}
-  {:else if page === 'it-home'}
-    <ItHome />
-  {:else if page === 'video-home'}
-    <VideoHome onOpen={openTool} />
-  {:else if page === 'record-home'}
-    <RecordHome />
-  {:else if page === 'pipeline'}
-    {#key hash}
-      <PipelinePage encoded={hash.slice(PIPELINE_ROUTE.length + 1)} />
-    {/key}
-  {:else if page === 'compare'}
-    <Compare />
-  {:else if page === 'share'}
-    <Share />
-  {:else if page === 'connect'}
-    {#if native}<ConnectTabs active="connect" />{/if}
-    {#key hash}
-      <ConnectPage {hash} onOpen={openTool} />
-    {/key}
-  {:else if page === 'lan'}
-    <ConnectTabs active="lan" />
-    <BrowserSharePage onOpen={openTool} />
-  {:else if page === 'local'}
-    <ConnectTabs active="local" />
-    <LocalPage {hash} onOpen={openTool} />
-  {:else if page === 'received'}
-    <Received {hash} onOpen={openTool} />
-  {:else if page === 'pdf-home' || page === 'image-home'}
-    <Home onOpen={openTool} view={section === 'image' ? 'image' : 'pdf'} />
-  {:else}
-    <Home onOpen={openTool} view="dashboard" />
-  {/if}
+<!-- Every tab stays mounted so it keeps its state; only the ones on screen are shown. -->
+<main class:split style:--panes={shown.length}>
+  {#each workspace.tabs as t (t.id)}
+    {@const visible = shown.includes(t)}
+    <!-- svelte-ignore a11y_no_static_element_interactions (pointer only: picks the tab in use, as a click on its tab would) -->
+    <div
+      class="pane"
+      class:current={t.id === workspace.active}
+      id="pane-{t.id}"
+      hidden={!visible}
+      onpointerdowncapture={() => activate(t.id)}
+      ondragentercapture={() => activate(t.id)}
+    >
+      <Route tab={t} active={t.id === workspace.active} {native} onOpen={openTool} />
+    </div>
+  {/each}
 </main>
 
 <Notice onOpen={openTool} />
@@ -284,13 +227,13 @@
 {/if}
 
 <footer class="muted">
-  {#if section === 'it'}
+  {#if current === 'it'}
     Open source, AGPL-3.0. Every tool runs in your browser; nothing you type is sent anywhere.
-  {:else if section === 'video'}
+  {:else if current === 'video'}
     Open source, AGPL-3.0. Powered by WebCodecs (via Mediabunny), ffmpeg.wasm and gifenc.
-  {:else if section === 'record'}
+  {:else if current === 'record'}
     Open source, AGPL-3.0. Recorded with your browser's MediaRecorder and kept in its own storage.
-  {:else if section === 'image'}
+  {:else if current === 'image'}
     Open source, AGPL-3.0. Powered by the Squoosh codecs, Tesseract and ONNX Runtime.
   {:else}
     Open source, AGPL-3.0. Powered by qpdf, MuPDF, Ghostscript, pdf-lib, the Squoosh codecs and ONNX Runtime.
@@ -303,8 +246,9 @@
     top: 0;
     z-index: 10;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 16px;
+    gap: 8px 16px;
     padding: 12px max(16px, calc((100vw - 1120px) / 2));
     background: color-mix(in srgb, var(--bg) 85%, transparent);
     backdrop-filter: blur(10px);
@@ -426,14 +370,36 @@
     font-weight: 700;
     text-align: center;
   }
-  .loading {
-    text-align: center;
-    margin-top: 48px;
-  }
   main {
     max-width: 1120px;
     margin: 0 auto;
     padding: 24px 16px 64px;
+  }
+  /* Split view: tabs side by side, each scrolling on its own, using the whole width. */
+  main.split {
+    max-width: none;
+    display: grid;
+    grid-template-columns: repeat(var(--panes), minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px;
+  }
+  .split .pane {
+    /* Sticky bars inside a pane stick to its top, not under the header. */
+    --header-h: 0px;
+    height: calc(100dvh - var(--chrome-h, 55px) - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 12px 14px 32px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+  }
+  .split .pane.current {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .pane[hidden] {
+    display: none;
   }
   footer {
     text-align: center;

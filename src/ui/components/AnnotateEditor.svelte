@@ -11,6 +11,10 @@
   import type { Annotation } from '../../core/types';
   import PdfPageView from './PdfPageView.svelte';
   import { drawBox, relative } from './BoxDrag';
+  import { usePane } from '../pane';
+
+  /** Window-wide shortcuts and drops go to the tab in use only (see pane.ts). */
+  const pane = usePane();
 
   let {
     bytes,
@@ -239,6 +243,7 @@
 
   $effect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!pane.active) return;
       if ((e.target as HTMLElement).closest('textarea, input')) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();

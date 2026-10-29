@@ -8,6 +8,10 @@
 <script lang="ts">
   import { inspectPdf, pdfThumbnails } from '../../core/runner';
   import { download } from '../../core/files';
+  import { usePane } from '../pane';
+
+  /** Window-wide shortcuts and drops go to the tab in use only (see pane.ts). */
+  const pane = usePane();
 
   let { file, onClose }: { file: File; onClose: () => void } = $props();
 
@@ -91,7 +95,7 @@
   });
 
   $effect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => pane.active && e.key === 'Escape' && onClose();
     addEventListener('keydown', onKey);
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';

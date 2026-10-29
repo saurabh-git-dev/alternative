@@ -29,6 +29,10 @@
   import { loadDashboard, loadPipelines, saveDashboard } from '../settings';
   import { IT_HOME, RECORD_HOME, VIDEO_HOME, itToolHref, videoToolHref } from '../section';
   import DashboardDialog, { type DashboardPreset } from '../components/DashboardDialog.svelte';
+  import { usePane } from '../pane';
+
+  /** Window-wide shortcuts and drops go to the tab in use only (see pane.ts). */
+  const pane = usePane();
 
   let { onOpen, view }: { onOpen: (id: string, files?: File[]) => void; view: 'dashboard' | 'pdf' | 'image' } = $props();
   const dashboard = $derived(view === 'dashboard');
@@ -309,6 +313,7 @@
   // Page-wide shortcuts and drop target, active while the home page is shown.
   $effect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!pane.active) return;
       const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]');
       if (e.key === '/' && !typing && !customizing) {
         e.preventDefault();
@@ -317,6 +322,7 @@
     };
     const hasFiles = (e: DragEvent) => e.dataTransfer?.types.includes('Files');
     const onOver = (e: DragEvent) => {
+      if (!pane.active) return;
       if (!hasFiles(e)) return;
       e.preventDefault();
       dragging = true;
@@ -325,6 +331,7 @@
       if (!e.relatedTarget) dragging = false;
     };
     const onDrop = (e: DragEvent) => {
+      if (!pane.active) return;
       if (!hasFiles(e)) return;
       e.preventDefault();
       dragging = false;
