@@ -43,6 +43,8 @@
   import { connectedCount, hub, liveDevices } from './connect/devices.svelte';
   import { loadTheme, saveTheme, type Theme } from './settings';
   import { canInstall, install, isNativeApp } from '../pwa/install.svelte';
+  import { APP_VERSION, REPO_URL, RELEASES_URL, newerRelease } from '../pwa/updates';
+  import { openLink } from '../core/open-link';
 
   const native = isNativeApp();
   enableCalls();
@@ -51,6 +53,17 @@
     startIncomingShare();
   }
   let theme = $state<Theme>(loadTheme());
+
+  /** A release newer than this copy, shown in the footer with a download link. */
+  let newer = $state<string | null>(null);
+  newerRelease().then((v) => (newer = v));
+
+  /** Links that leave the app open in the browser; the native apps hand them to the system. */
+  function external(e: MouseEvent) {
+    if (!native) return;
+    e.preventDefault();
+    openLink((e.currentTarget as HTMLAnchorElement).href);
+  }
 
   const tab = $derived(currentTab());
   const route = $derived(parseRoute(tab.hash, native));
@@ -238,6 +251,18 @@
   {:else}
     Open source, AGPL-3.0. Powered by qpdf, MuPDF, Ghostscript, pdf-lib, the Squoosh codecs and ONNX Runtime.
   {/if}
+  <div class="about">
+    <a href={REPO_URL} target="_blank" rel="noopener" onclick={external}>Source on GitHub</a>
+    <span>·</span>
+    <span title="The version of Tools running here">v{APP_VERSION}</span>
+    {#if newer}
+      <span>·</span>
+      <a class="update" href={RELEASES_URL} target="_blank" rel="noopener" onclick={external}>⬇️ v{newer} is out: download</a>
+    {:else if !native}
+      <span>·</span>
+      <a href={RELEASES_URL} target="_blank" rel="noopener" onclick={external}>Windows, Linux & Android apps</a>
+    {/if}
+  </div>
 </footer>
 
 <style>
@@ -405,6 +430,27 @@
     text-align: center;
     font-size: 13px;
     padding: 24px 16px 40px;
+  }
+  .about {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 8px;
+    margin-top: 8px;
+  }
+  .about a {
+    color: inherit;
+  }
+  .about a:hover {
+    color: var(--accent);
+  }
+  .about .update {
+    padding: 1px 9px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
   }
   @media (max-width: 1180px) {
     .badge {

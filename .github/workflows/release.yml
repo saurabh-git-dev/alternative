@@ -62,6 +62,7 @@ jobs:
 
   site:
     if: github.event_name != 'pull_request'
+    needs: version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +73,10 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      # The footer shows this version, and offers newer releases (src/pwa/updates.ts).
       - run: npm run build
+        env:
+          APP_VERSION: ${{ needs.version.outputs.version }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
@@ -124,6 +128,8 @@ jobs:
       - run: npm ci
       - run: npx tauri build --bundles ${{ matrix.bundles }} --config '{"version":"${{ needs.version.outputs.version }}"}'
         shell: bash
+        env:
+          APP_VERSION: ${{ needs.version.outputs.version }}
       - uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.name }}
@@ -167,6 +173,8 @@ jobs:
       # time, with the app icons and permissions.
       - run: src-tauri/scripts/android-init.sh
       - run: npx tauri android build --apk --target aarch64 armv7 x86_64 --config '{"version":"${{ needs.version.outputs.version }}"}'
+        env:
+          APP_VERSION: ${{ needs.version.outputs.version }}
       - name: Sign the APK
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

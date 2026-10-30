@@ -5,6 +5,14 @@ import { createHash } from 'node:crypto';
 import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
+
+/**
+ * The version shown in the footer. Release builds pass the version the
+ * release workflow picked (APP_VERSION); local builds use package.json's.
+ */
+const appVersion = process.env.APP_VERSION || pkg.version;
+
 const nodeModules = (path: string) => fileURLToPath(new URL(`./node_modules/${path}`, import.meta.url));
 
 /**
@@ -111,6 +119,7 @@ export default defineConfig({
       'gs-wasm-assets': nodeModules('@bentopdf/gs-wasm/assets'),
     },
   },
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   base: './',
   server: { headers: isolationHeaders },
   preview: { headers: isolationHeaders },

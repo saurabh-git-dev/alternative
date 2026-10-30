@@ -244,7 +244,7 @@
         'pdf.merge', 'pdf.split', 'pdf.compress', 'pdf.to-images', 'pdf.from-images', 'pdf.sign', 'pdf.edit-text', 'pdf.fill-form', 'pdf.protect', 'pdf.unlock',
         'image.compress', 'image.resize', 'image.crop', 'image.convert', 'image.remove-background',
         'video.trim', 'video.compress', 'video.audio',
-        'it:qr', 'it:qr-scan', 'it:password',
+        'it:qr', 'it:qr-scan', 'it:password', 'it:summarize',
         'share', 'connect', 'record', ...saved,
       ],
     },
@@ -252,7 +252,7 @@
       id: 'documents',
       icon: '🗂️',
       label: 'Documents & office',
-      keys: [...keysOf('pdf'), 'image.ocr', 'image.convert', 'image.compress', 'it:qr-scan', 'share', 'connect', 'pipeline', ...saved],
+      keys: [...keysOf('pdf'), 'image.ocr', 'image.convert', 'image.compress', 'it:summarize', 'it:qr-scan', 'share', 'connect', 'pipeline', ...saved],
     },
     {
       id: 'media',

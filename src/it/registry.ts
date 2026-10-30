@@ -66,6 +66,7 @@ export const IT_TOOLS: ItToolInfo[] = [
   { id: 'chmod', icon: '🗝️', title: 'Chmod calculator', description: 'Unix permissions: tick boxes, get 755 and rwxr-xr-x.', keywords: 'permissions unix linux octal file', category: 'dev', load: () => import('../ui/it/tools/Chmod.svelte') },
 
   // Text
+  { id: 'summarize', icon: '🧠', title: 'Summarize', description: 'The gist of a PDF, Word file or any text, on this device: key points or a paragraph.', keywords: 'summary summarizer tldr ai key points abstract pdf docx document article digest shorten', category: 'text', load: () => import('../ui/it/tools/Summarize.svelte') },
   { id: 'stats', icon: '📏', title: 'Text statistics', description: 'Count characters, words, lines, bytes and reading time.', keywords: 'count length word counter characters', category: 'text', load: transform(text, 'stats') },
   { id: 'slug', icon: '🐌', title: 'Slugify', description: 'Turn a title into a clean URL slug.', keywords: 'url permalink slug', category: 'text', load: transform(text, 'slug') },
   { id: 'lorem', icon: '📜', title: 'Lorem ipsum', description: 'Placeholder text, as many paragraphs as you need.', keywords: 'placeholder dummy filler text generate', category: 'text', load: () => import('../ui/it/tools/Lorem.svelte') },
