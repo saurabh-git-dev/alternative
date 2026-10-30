@@ -1,4 +1,7 @@
-/** Type declarations for packages that ship without them. */
+/** Type declarations for packages that ship without them, and build-time constants. */
+
+/** The app's version, e.g. "1.4.0" (set in vite.config.ts). */
+declare const __APP_VERSION__: string;
 
 declare module '@ffmpeg/core' {
   /** Emscripten factory for the ffmpeg.wasm core; see engines/ffmpeg.ts for the parts we use. */

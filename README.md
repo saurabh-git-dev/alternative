@@ -68,7 +68,14 @@ utilities, linked from the header switch on every page:
 | Converters | Base64, Date & time, Number bases, Colors, JSON ↔ YAML, JSON ↔ CSV, Case, Text ↔ binary, Unicode escape, Roman numerals, NATO alphabet |
 | Web & network | URL encode/decode, URL parser, HTML entities, JWT decoder, QR code generator (text, links, Wi-Fi), QR code scanner (camera or photo: links, Wi-Fi, contacts, events …), IPv4 subnets, HTTP status codes, Device info |
 | Development | JSON formatter, Regex tester, Text diff, Cron explainer, Chmod calculator |
-| Text | Text statistics, Slugify, Lorem ipsum |
+| Text | Summarize (PDF, Word, web page, image or pasted text), Text statistics, Slugify, Lorem ipsum |
+
+**Summarize** reads a PDF (OCR for scanned pages), Word or OpenDocument
+file, web page, subtitles, image of text or pasted text, and gives key points
+or a paragraph in three lengths. In desktop Chrome and Edge it uses the
+browser's on-device AI (the Summarizer API), which writes the summary in new
+words; everywhere else, or if that fails, it picks the text's key sentences
+(TextRank) instantly with no download. Nothing is uploaded either way.
 
 Every output can be copied, saved, or shared to your phone (QR code when it
 fits, direct encrypted transfer when it doesn't), and most tools can copy a
@@ -128,6 +135,9 @@ them and work offline after that. The icons come from `tools/make-icons.py`.
 Windows (x64), Linux (x64 and arm64: AppImage, deb, rpm) and Android apps
 wrap the same site with [Tauri](https://tauri.app) and are attached to every
 [release](../../releases). See [docs/native-apps.md](docs/native-apps.md).
+The footer shows the version running, links to the source, and offers a
+download when a newer release is out (it asks GitHub for the latest version
+at most twice a day).
 
 The apps add **Local share**: devices on the same network, found without the
 internet. Pair with a PIN to chat, call and send files of any size; LocalSend
